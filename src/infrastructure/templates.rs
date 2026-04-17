@@ -30,7 +30,9 @@ impl OriginLoadModeOwned {
             Self::SameDir { original_name } => OriginLoadMode::SameDir {
                 original_name: original_name.as_str(),
             },
-            Self::CustomPath { path } => OriginLoadMode::CustomPath { path: path.as_str() },
+            Self::CustomPath { path } => OriginLoadMode::CustomPath {
+                path: path.as_str(),
+            },
         }
     }
 }
@@ -66,8 +68,9 @@ struct PreparedExport<'a> {
     raw_name: &'a str,
     ordinal: u16,
     forwarder: Option<&'a str>,
-    label: String,
+    public_name: String,
     stub: String,
+    is_ordinal_only: bool,
 }
 
 const TPL_SOLUTION: &str = include_str!(concat!(
@@ -170,113 +173,85 @@ fn render_load_origin_module(ctx: &VsTemplateContext) -> String {
     match ctx.origin_load_mode {
         OriginLoadMode::SystemDir => {
             let dll = escape_c_text_literal(ctx.dll_name);
-            let _ = writeln!(out, "    TCHAR module_path[MAX_PATH] = {{ 0 }};");
-            let _ = writeln!(out, "    TCHAR message[MAX_PATH] = {{ 0 }};");
+            let _ = writeln!(out, "    (void)module;");
+            let _ = writeln!(out, "    PathBuffer module_path{{}};");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    UNREFERENCED_PARAMETER(module);");
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "    GetSystemDirectory(module_path, MAX_PATH);");
-            let _ = writeln!(out, "    lstrcat(module_path, TEXT(\"\\\\\"));");
-            let _ = writeln!(out, "    lstrcat(module_path, TEXT(\"{}\"));", dll);
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "    g_origin_module_handle = LoadLibrary(module_path);");
-            let _ = writeln!(out, "    if (!g_origin_module_handle)");
+            let _ = writeln!(
+                out,
+                "    if (!query_system_dll_path(module_path, TEXT(\"{}\")))",
+                dll
+            );
             let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        wsprintf(message, TEXT(\"Cannot locate %s, AheadLibEx cannot continue.\\\\nerror code:0x%08X\"), module_path, GetLastError());");
-            let _ = writeln!(out, "        MessageBox(NULL, message, TEXT(\"AheadLibEx\"), MB_ICONSTOP);");
+            let _ = writeln!(out, "        return false;");
             let _ = writeln!(out, "    }}");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    return g_origin_module_handle != NULL;");
+            let _ = writeln!(
+                out,
+                "    return load_original_module_from_path(module_path);"
+            );
         }
         OriginLoadMode::SameDir { original_name } => {
             let original = escape_c_text_literal(original_name);
-            let _ = writeln!(out, "    TCHAR module_path[MAX_PATH] = {{ 0 }};");
-            let _ = writeln!(out, "    TCHAR message[MAX_PATH] = {{ 0 }};");
+            let _ = writeln!(out, "    PathBuffer module_path{{}};");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    DWORD n = GetModuleFileName(module, module_path, MAX_PATH);");
-            let _ = writeln!(out, "    if (n == 0 || n >= MAX_PATH)");
+            let _ = writeln!(out, "    if (!query_module_directory(module, module_path))");
             let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        wsprintf(message, TEXT(\"GetModuleFileName failed, AheadLibEx cannot continue.\\\\nerror code:0x%08X\"), GetLastError());");
-            let _ = writeln!(out, "        MessageBox(NULL, message, TEXT(\"AheadLibEx\"), MB_ICONSTOP);");
-            let _ = writeln!(out, "        return FALSE;");
+            let _ = writeln!(out, "        return false;");
             let _ = writeln!(out, "    }}");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    TCHAR* last = NULL;");
-            let _ = writeln!(out, "    for (TCHAR* p = module_path; *p; ++p)");
+            let _ = writeln!(
+                out,
+                "    if (!append_text(module_path, TEXT(\"{}\")))",
+                original
+            );
             let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        if (*p == TEXT('\\\\') || *p == TEXT('/'))");
-            let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            last = p;");
-            let _ = writeln!(out, "        }}");
-            let _ = writeln!(out, "    }}");
-            let _ = writeln!(out, "    if (last)");
-            let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        *(last + 1) = TEXT('\\0');");
-            let _ = writeln!(out, "    }}");
-            let _ = writeln!(out, "    else");
-            let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        module_path[0] = TEXT('\\0');");
+            let _ = writeln!(out, "        show_path_too_long();");
+            let _ = writeln!(out, "        return false;");
             let _ = writeln!(out, "    }}");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    lstrcat(module_path, TEXT(\"{}\"));", original);
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "    g_origin_module_handle = LoadLibrary(module_path);");
-            let _ = writeln!(out, "    if (!g_origin_module_handle)");
-            let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        wsprintf(message, TEXT(\"Cannot locate %s, AheadLibEx cannot continue.\\\\nerror code:0x%08X\"), module_path, GetLastError());");
-            let _ = writeln!(out, "        MessageBox(NULL, message, TEXT(\"AheadLibEx\"), MB_ICONSTOP);");
-            let _ = writeln!(out, "    }}");
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "    return g_origin_module_handle != NULL;");
+            let _ = writeln!(
+                out,
+                "    return load_original_module_from_path(module_path);"
+            );
         }
         OriginLoadMode::CustomPath { path } => {
             let origin_cfg = escape_c_text_literal(path);
-            let _ = writeln!(out, "    TCHAR module_path[MAX_PATH] = {{ 0 }};");
-            let _ = writeln!(out, "    TCHAR message[MAX_PATH] = {{ 0 }};");
-            let _ = writeln!(out, "    const TCHAR origin_cfg[] = TEXT(\"{}\");", origin_cfg);
+            let _ = writeln!(out, "    PathBuffer module_path{{}};");
+            let _ = writeln!(
+                out,
+                "    const TCHAR origin_cfg[] = TEXT(\"{}\");",
+                origin_cfg
+            );
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    if ((origin_cfg[0] && origin_cfg[1] == TEXT(':')) || origin_cfg[0] == TEXT('\\\\') || origin_cfg[0] == TEXT('/'))");
+            let _ = writeln!(out, "    if (is_absolute_path(origin_cfg))");
             let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        lstrcpyn(module_path, origin_cfg, MAX_PATH);");
+            let _ = writeln!(out, "        if (!copy_text(module_path, origin_cfg))");
+            let _ = writeln!(out, "        {{");
+            let _ = writeln!(out, "            show_path_too_long();");
+            let _ = writeln!(out, "            return false;");
+            let _ = writeln!(out, "        }}");
             let _ = writeln!(out, "    }}");
             let _ = writeln!(out, "    else");
             let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        DWORD n = GetModuleFileName(module, module_path, MAX_PATH);");
-            let _ = writeln!(out, "        if (n == 0 || n >= MAX_PATH)");
+            let _ = writeln!(
+                out,
+                "        if (!query_module_directory(module, module_path))"
+            );
             let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            wsprintf(message, TEXT(\"GetModuleFileName failed, AheadLibEx cannot continue.\\\\nerror code:0x%08X\"), GetLastError());");
-            let _ = writeln!(out, "            MessageBox(NULL, message, TEXT(\"AheadLibEx\"), MB_ICONSTOP);");
-            let _ = writeln!(out, "            return FALSE;");
+            let _ = writeln!(out, "            return false;");
             let _ = writeln!(out, "        }}");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "        TCHAR* last = NULL;");
-            let _ = writeln!(out, "        for (TCHAR* p = module_path; *p; ++p)");
+            let _ = writeln!(out, "        if (!append_text(module_path, origin_cfg))");
             let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            if (*p == TEXT('\\\\') || *p == TEXT('/'))");
-            let _ = writeln!(out, "            {{");
-            let _ = writeln!(out, "                last = p;");
-            let _ = writeln!(out, "            }}");
+            let _ = writeln!(out, "            show_path_too_long();");
+            let _ = writeln!(out, "            return false;");
             let _ = writeln!(out, "        }}");
-            let _ = writeln!(out, "        if (last)");
-            let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            *(last + 1) = TEXT('\\0');");
-            let _ = writeln!(out, "        }}");
-            let _ = writeln!(out, "        else");
-            let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            module_path[0] = TEXT('\\0');");
-            let _ = writeln!(out, "        }}");
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "        lstrcat(module_path, origin_cfg);");
             let _ = writeln!(out, "    }}");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    g_origin_module_handle = LoadLibrary(module_path);");
-            let _ = writeln!(out, "    if (!g_origin_module_handle)");
-            let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        wsprintf(message, TEXT(\"Cannot locate %s, AheadLibEx cannot continue.\\\\nerror code:0x%08X\"), module_path, GetLastError());");
-            let _ = writeln!(out, "        MessageBox(NULL, message, TEXT(\"AheadLibEx\"), MB_ICONSTOP);");
-            let _ = writeln!(out, "    }}");
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "    return g_origin_module_handle != NULL;");
+            let _ = writeln!(
+                out,
+                "    return load_original_module_from_path(module_path);"
+            );
         }
     }
     out
@@ -299,6 +274,24 @@ pub fn sanitize_identifier(raw: &str) -> String {
     }
 }
 
+fn escape_c_string_literal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\r' => {}
+            '\n' => out.push_str("\\n"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+fn escape_def_quoted_name(s: &str) -> String {
+    s.replace('"', "\"\"")
+}
+
 fn prepare_exports(entries: &[ExportEntry]) -> Vec<PreparedExport<'_>> {
     let mut exports = entries.iter().collect::<Vec<_>>();
     exports.sort_by_key(|e| (e.ordinal, e.name.clone()));
@@ -306,7 +299,7 @@ fn prepare_exports(entries: &[ExportEntry]) -> Vec<PreparedExport<'_>> {
     let mut used_stubs = HashSet::new();
     let mut prepared = Vec::with_capacity(exports.len());
     for entry in exports {
-        let is_noname = entry.name.starts_with('#');
+        let is_noname = entry.is_ordinal_only;
         let label = if is_noname {
             format!("Noname{}", entry.ordinal)
         } else {
@@ -328,8 +321,9 @@ fn prepare_exports(entries: &[ExportEntry]) -> Vec<PreparedExport<'_>> {
             raw_name: &entry.name,
             ordinal: entry.ordinal,
             forwarder: entry.forwarder.as_deref(),
-            label,
+            public_name: label,
             stub,
+            is_ordinal_only: is_noname,
         });
     }
 
@@ -386,14 +380,14 @@ fn cl_item_group(base: &str, is_x64: bool) -> String {
     if is_x64 {
         format!(
             r#"  <ItemGroup>
-    <ClCompile Include="{base}_x64.c" />
+    <ClCompile Include="{base}_x64.cpp" />
   </ItemGroup>
 "#
         )
     } else {
         format!(
             r#"  <ItemGroup>
-    <ClCompile Include="{base}_x86.c" />
+    <ClCompile Include="{base}_x86.cpp" />
   </ItemGroup>
 "#
         )
@@ -416,6 +410,15 @@ fn asm_item_group(base: &str, is_x64: bool) -> String {
 "#
         )
     }
+}
+
+fn def_item_group(base: &str) -> String {
+    format!(
+        r#"  <ItemGroup>
+    <None Include="{base}.def" />
+  </ItemGroup>
+"#
+    )
 }
 
 fn config_groups(toolset: &str, is_x64: bool) -> String {
@@ -488,7 +491,7 @@ fn exports_macro(project_name: &str) -> String {
     }
 }
 
-fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
+fn item_definitions(exports_macro: &str, is_x64: bool, def_file: &str) -> String {
     if is_x64 {
         format!(
             r#"  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -497,6 +500,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
@@ -504,6 +508,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <ModuleDefinitionFile>{def_file}</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -514,6 +519,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
@@ -523,10 +529,12 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <ModuleDefinitionFile>{def_file}</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
 "#,
-            EXPORTS_MACRO = exports_macro
+            EXPORTS_MACRO = exports_macro,
+            def_file = def_file,
         )
     } else {
         format!(
@@ -536,6 +544,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
@@ -546,6 +555,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <ModuleDefinitionFile>{def_file}</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -556,6 +566,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
@@ -568,10 +579,12 @@ fn item_definitions(exports_macro: &str, is_x64: bool) -> String {
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <ModuleDefinitionFile>{def_file}</ModuleDefinitionFile>
     </Link>
   </ItemDefinitionGroup>
 "#,
-            EXPORTS_MACRO = exports_macro
+            EXPORTS_MACRO = exports_macro,
+            def_file = def_file,
         )
     }
 }
@@ -598,9 +611,11 @@ fn sanitize_build_target_name(raw: &str) -> String {
 
 fn extension_targets(is_x64: bool) -> String {
     if is_x64 {
-        "    <Import Project=\"$(VCTargetsPath)\\BuildCustomizations\\masm.targets\" />\n".to_string()
+        "    <Import Project=\"$(VCTargetsPath)\\BuildCustomizations\\masm.targets\" />\n"
+            .to_string()
     } else {
-        "    <Import Project=\"$(VCTargetsPath)\\BuildCustomizations\\masm.targets\" />\n".to_string()
+        "    <Import Project=\"$(VCTargetsPath)\\BuildCustomizations\\masm.targets\" />\n"
+            .to_string()
     }
 }
 
@@ -608,7 +623,7 @@ fn filter_itemgroups(base: &str, is_x64: bool) -> String {
     if is_x64 {
         format!(
             r#"  <ItemGroup>
-     <ClCompile Include="{base}_x64.c">
+     <ClCompile Include="{base}_x64.cpp">
        <Filter>Source Files</Filter>
      </ClCompile>
    </ItemGroup>
@@ -617,12 +632,17 @@ fn filter_itemgroups(base: &str, is_x64: bool) -> String {
        <Filter>Source Files</Filter>
      </MASM>
    </ItemGroup>
+   <ItemGroup>
+     <None Include="{base}.def">
+       <Filter>Source Files</Filter>
+     </None>
+   </ItemGroup>
 "#
         )
     } else {
         format!(
             r#"  <ItemGroup>
-     <ClCompile Include="{base}_x86.c">
+     <ClCompile Include="{base}_x86.cpp">
        <Filter>Source Files</Filter>
      </ClCompile>
   </ItemGroup>
@@ -631,6 +651,11 @@ fn filter_itemgroups(base: &str, is_x64: bool) -> String {
       <Filter>Source Files</Filter>
     </MASM>
    </ItemGroup>
+  <ItemGroup>
+    <None Include="{base}.def">
+      <Filter>Source Files</Filter>
+    </None>
+  </ItemGroup>
 "#
         )
     }
@@ -660,6 +685,7 @@ pub fn render_solution(ctx: &VsTemplateContext, is_x64: bool) -> String {
 
 pub fn render_vcxproj(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let exports_macro = exports_macro(ctx.project_name);
+    let def_file = format!("{}.def", ctx.base_name);
     fill(
         TPL_VCXPROJ,
         &[
@@ -668,9 +694,13 @@ pub fn render_vcxproj(ctx: &VsTemplateContext, is_x64: bool) -> String {
             ("PROJECT_CONFIGS", project_config_entries(is_x64)),
             ("CL_ITEM_GROUP", cl_item_group(ctx.base_name, is_x64)),
             ("ASM_ITEM_GROUP", asm_item_group(ctx.base_name, is_x64)),
+            ("DEF_ITEM_GROUP", def_item_group(ctx.base_name)),
             ("CONFIG_GROUPS", config_groups("v143", is_x64)),
             ("PROPERTY_SHEETS", property_sheets(is_x64)),
-            ("ITEM_DEFINITIONS", item_definitions(&exports_macro, is_x64)),
+            (
+                "ITEM_DEFINITIONS",
+                item_definitions(&exports_macro, is_x64, &def_file),
+            ),
             ("EXTENSION_SETTINGS", extension_settings(is_x64)),
             ("EXTENSION_TARGETS", extension_targets(is_x64)),
         ],
@@ -679,6 +709,7 @@ pub fn render_vcxproj(ctx: &VsTemplateContext, is_x64: bool) -> String {
 
 pub fn render_vcxproj_2026(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let exports_macro = exports_macro(ctx.project_name);
+    let def_file = format!("{}.def", ctx.base_name);
     fill(
         TPL_VCXPROJ_2026,
         &[
@@ -692,9 +723,13 @@ pub fn render_vcxproj_2026(ctx: &VsTemplateContext, is_x64: bool) -> String {
             ("PROJECT_CONFIGS", project_config_entries(is_x64)),
             ("CL_ITEM_GROUP", cl_item_group(ctx.base_name, is_x64)),
             ("ASM_ITEM_GROUP", asm_item_group(ctx.base_name, is_x64)),
+            ("DEF_ITEM_GROUP", def_item_group(ctx.base_name)),
             ("CONFIG_GROUPS", config_groups("v145", is_x64)),
             ("PROPERTY_SHEETS", property_sheets(is_x64)),
-            ("ITEM_DEFINITIONS", item_definitions(&exports_macro, is_x64)),
+            (
+                "ITEM_DEFINITIONS",
+                item_definitions(&exports_macro, is_x64, &def_file),
+            ),
             ("EXTENSION_SETTINGS", extension_settings(is_x64)),
             ("EXTENSION_TARGETS", extension_targets(is_x64)),
         ],
@@ -709,7 +744,10 @@ pub fn render_filters(ctx: &VsTemplateContext, is_x64: bool) -> String {
             ("GUID_SOURCE", ctx.guids.filter_source.to_string()),
             ("GUID_HEADER", ctx.guids.filter_header.to_string()),
             ("GUID_RESOURCE", ctx.guids.filter_resource.to_string()),
-            ("FILTER_ITEMGROUPS", filter_itemgroups(ctx.base_name, is_x64)),
+            (
+                "FILTER_ITEMGROUPS",
+                filter_itemgroups(ctx.base_name, is_x64),
+            ),
         ],
     )
 }
@@ -722,7 +760,10 @@ pub fn render_filters_2026(ctx: &VsTemplateContext, is_x64: bool) -> String {
             ("GUID_SOURCE", ctx.guids.filter_source.to_string()),
             ("GUID_HEADER", ctx.guids.filter_header.to_string()),
             ("GUID_RESOURCE", ctx.guids.filter_resource.to_string()),
-            ("FILTER_ITEMGROUPS", filter_itemgroups(ctx.base_name, is_x64)),
+            (
+                "FILTER_ITEMGROUPS",
+                filter_itemgroups(ctx.base_name, is_x64),
+            ),
         ],
     )
 }
@@ -748,44 +789,21 @@ pub fn render_slnx_2026(ctx: &VsTemplateContext, is_x64: bool) -> String {
 pub fn render_c(ctx: &VsTemplateContext) -> String {
     let exports = prepare_exports(ctx.exports);
 
-    let mut export_pragmas = String::new();
-    for exp in &exports {
-        let noname = if exp.label.starts_with("Noname") {
-            ",NONAME"
-        } else {
-            ""
-        };
-        let entry = format!("{}=AheadLibEx_{},@{}{}", exp.label, exp.stub, exp.ordinal, noname);
-        let _ = writeln!(
-            export_pragmas,
-            "#pragma comment(linker, \"/EXPORT:\\\"{}\\\"\")",
-            entry
-        );
-        let _ = writeln!(
-            export_pragmas,
-            "#pragma comment(linker, \"/alternatename:AheadLibEx_{}=_AheadLibEx_{}\")",
-            exp.stub,
-            exp.stub
-        );
-    }
-
     let mut forward_decls = String::new();
-    forward_decls.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
     for exp in &exports {
         let _ = writeln!(
             forward_decls,
-            "PVOID pfnAheadLibEx_{} = NULL;",
+            "FARPROC pfnAheadLibEx_{} = nullptr;",
             exp.stub
         );
     }
-    forward_decls.push_str("#ifdef __cplusplus\n}\n#endif\n");
 
     let trampolines = String::new();
     // x86 uses a separate jump table assembly file for toolchain compatibility.
 
     let mut init_forwarders = String::new();
     for exp in &exports {
-        if exp.label.starts_with("Noname") {
+        if exp.is_ordinal_only {
             let _ = writeln!(
                 init_forwarders,
                 "    pfnAheadLibEx_{} = get_address(MAKEINTRESOURCEA({}));",
@@ -795,7 +813,8 @@ pub fn render_c(ctx: &VsTemplateContext) -> String {
             let _ = writeln!(
                 init_forwarders,
                 "    pfnAheadLibEx_{} = get_address(\"{}\");",
-                exp.stub, exp.raw_name
+                exp.stub,
+                escape_c_string_literal(exp.raw_name)
             );
         }
     }
@@ -805,7 +824,7 @@ pub fn render_c(ctx: &VsTemplateContext) -> String {
         &[
             ("DLL_NAME", ctx.dll_name.to_string()),
             ("LOAD_ORIGIN_MODULE", render_load_origin_module(ctx)),
-            ("EXPORT_PRAGMAS", export_pragmas),
+            ("EXPORT_PRAGMAS", String::new()),
             ("FORWARD_DECLS", forward_decls),
             ("INIT_FORWARDERS", init_forwarders),
             ("X86_TRAMPOLINES", trampolines),
@@ -816,35 +835,18 @@ pub fn render_c(ctx: &VsTemplateContext) -> String {
 pub fn render_c_x64(ctx: &VsTemplateContext) -> String {
     let exports = prepare_exports(ctx.exports);
 
-    let mut export_pragmas = String::new();
-    for exp in &exports {
-        let noname = if exp.label.starts_with("Noname") {
-            ",NONAME"
-        } else {
-            ""
-        };
-        let entry = format!("{}=AheadLibEx_{},@{}{}", exp.label, exp.stub, exp.ordinal, noname);
-        let _ = writeln!(
-            export_pragmas,
-            "#pragma comment(linker, \"/EXPORT:\\\"{}\\\"\")",
-            entry
-        );
-    }
-
     let mut forward_decls = String::new();
-    forward_decls.push_str("#ifdef __cplusplus\nextern \"C\" {\n#endif\n");
     for exp in &exports {
         let _ = writeln!(
             forward_decls,
-            "PVOID pfnAheadLibEx_{} = NULL;",
+            "FARPROC pfnAheadLibEx_{} = nullptr;",
             exp.stub
         );
     }
-    forward_decls.push_str("#ifdef __cplusplus\n}\n#endif\n");
 
     let mut init_forwarders = String::new();
     for exp in &exports {
-        if exp.label.starts_with("Noname") {
+        if exp.is_ordinal_only {
             let _ = writeln!(
                 init_forwarders,
                 "    pfnAheadLibEx_{} = get_address(MAKEINTRESOURCEA({}));",
@@ -854,7 +856,8 @@ pub fn render_c_x64(ctx: &VsTemplateContext) -> String {
             let _ = writeln!(
                 init_forwarders,
                 "    pfnAheadLibEx_{} = get_address(\"{}\");",
-                exp.stub, exp.raw_name
+                exp.stub,
+                escape_c_string_literal(exp.raw_name)
             );
         }
     }
@@ -864,7 +867,7 @@ pub fn render_c_x64(ctx: &VsTemplateContext) -> String {
         &[
             ("DLL_NAME", ctx.dll_name.to_string()),
             ("LOAD_ORIGIN_MODULE", render_load_origin_module(ctx)),
-            ("EXPORT_PRAGMAS", export_pragmas),
+            ("EXPORT_PRAGMAS", String::new()),
             ("FORWARD_DECLS", forward_decls),
             ("INIT_FORWARDERS", init_forwarders),
         ],
@@ -965,12 +968,13 @@ pub fn render_def(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let exports = prepare_exports(ctx.exports);
 
     fn needs_quotes(name: &str) -> bool {
-        name.chars().any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
+        name.chars()
+            .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
     }
 
     fn quote_if_needed(name: &str) -> String {
         if needs_quotes(name) {
-            format!("\"{name}\"")
+            format!("\"{}\"", escape_def_quoted_name(name))
         } else {
             name.to_string()
         }
@@ -980,22 +984,25 @@ pub fn render_def(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let _ = writeln!(out, "LIBRARY \"{}\"", ctx.dll_name);
     let _ = writeln!(out, "EXPORTS");
 
+    let mut ordinal_written = HashSet::new();
     for exp in &exports {
-        let export_name = quote_if_needed(&exp.label);
+        let export_name = quote_if_needed(&exp.public_name);
         let internal = if is_x64 {
             format!("AheadLibEx_{}", exp.stub)
         } else {
             format!("_AheadLibEx_{}", exp.stub)
         };
-        let noname = if exp.label.starts_with("Noname") {
-            " NONAME"
+        let write_ordinal = ordinal_written.insert(exp.ordinal);
+        let ordinal_suffix = if write_ordinal {
+            format!(" @{}", exp.ordinal)
         } else {
-            ""
+            String::new()
         };
+        let noname = if exp.is_ordinal_only { " NONAME" } else { "" };
         let _ = writeln!(
             out,
-            "    {}={} @{}{}",
-            export_name, internal, exp.ordinal, noname
+            "    {}={}{}{}",
+            export_name, internal, ordinal_suffix, noname
         );
     }
 
@@ -1005,15 +1012,15 @@ pub fn render_def(ctx: &VsTemplateContext, is_x64: bool) -> String {
 pub fn render_cmake_lists(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let cmake_project_name = sanitize_build_target_name(&format!("AheadLibEx_{}", ctx.base_name));
 
-    let (c_src, asm_masm, asm_gas) = if is_x64 {
+    let (cpp_src, asm_masm, asm_gas) = if is_x64 {
         (
-            format!("{}_x64.c", ctx.base_name),
+            format!("{}_x64.cpp", ctx.base_name),
             format!("{}_x64_jump.asm", ctx.base_name),
             format!("{}_x64_jump.S", ctx.base_name),
         )
     } else {
         (
-            format!("{}_x86.c", ctx.base_name),
+            format!("{}_x86.cpp", ctx.base_name),
             format!("{}_x86_jump.asm", ctx.base_name),
             format!("{}_x86_jump.S", ctx.base_name),
         )
@@ -1025,7 +1032,7 @@ pub fn render_cmake_lists(ctx: &VsTemplateContext, is_x64: bool) -> String {
             ("CMAKE_PROJECT_NAME", cmake_project_name),
             ("BASE", ctx.base_name.to_string()),
             ("OUTPUT_NAME", ctx.base_name.to_string()),
-            ("C_SRC", c_src),
+            ("CPP_SRC", cpp_src),
             ("ASM_MASM_SRC", asm_masm),
             ("ASM_GAS_SRC", asm_gas),
             ("DEF_SRC", format!("{}.def", ctx.base_name)),

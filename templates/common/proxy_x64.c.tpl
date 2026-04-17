@@ -3,98 +3,239 @@
 // Blog: https://www.winsec.cn
 // Github: https://github.com/i1tao/AheadLibEx
 
-// Auto proxy for {{DLL_NAME}}
-
+#include <array>
 #include <windows.h>
-
-#ifdef UNREFERENCED_PARAMETER
-#undef UNREFERENCED_PARAMETER
-#endif
-#define UNREFERENCED_PARAMETER(P) (void)(P)
+#include <strsafe.h>
 
 {{EXPORT_PRAGMAS}}
 
-#ifdef __cplusplus
-#define AHEADLIB_EXTERN extern "C"
-#else
-#define AHEADLIB_EXTERN
-#endif
-
+extern "C" {
 {{FORWARD_DECLS}}
+}
 
-#undef AHEADLIB_EXTERN
+namespace aheadlibex {
 
-static HMODULE g_origin_module_handle;
+using ForwarderAddress = FARPROC;
+using PathBuffer = std::array<TCHAR, MAX_PATH>;
+using MessageBuffer = std::array<TCHAR, MAX_PATH * 2>;
+using OrdinalBuffer = std::array<char, 64>;
 
-static VOID WINAPI free_origin_module(void)
+constexpr TCHAR kMessageCaption[] = TEXT("AheadLibEx");
+
+HMODULE g_origin_module_handle = nullptr;
+
+void show_message_box(const TCHAR* message, UINT flags = MB_ICONSTOP) noexcept
 {
-    if (g_origin_module_handle)
+    ::MessageBox(nullptr, message, kMessageCaption, flags);
+}
+
+void show_last_error(const TCHAR* prefix, const TCHAR* detail = nullptr) noexcept
+{
+    MessageBuffer message{};
+    if (detail != nullptr && detail[0] != TEXT('\0'))
     {
-        FreeLibrary(g_origin_module_handle);
-        g_origin_module_handle = NULL;
+        ::StringCchPrintf(
+            message.data(),
+            message.size(),
+            TEXT("%s %s, AheadLibEx cannot continue.\nerror code:0x%08X"),
+            prefix,
+            detail,
+            ::GetLastError());
+    }
+    else
+    {
+        ::StringCchPrintf(
+            message.data(),
+            message.size(),
+            TEXT("%s, AheadLibEx cannot continue.\nerror code:0x%08X"),
+            prefix,
+            ::GetLastError());
+    }
+    show_message_box(message.data());
+}
+
+void show_path_too_long() noexcept
+{
+    show_message_box(TEXT("Resolved original DLL path is too long, AheadLibEx cannot continue."));
+}
+
+bool copy_text(PathBuffer& target, const TCHAR* text) noexcept
+{
+    return SUCCEEDED(::StringCchCopy(target.data(), target.size(), text));
+}
+
+bool append_text(PathBuffer& target, const TCHAR* text) noexcept
+{
+    return SUCCEEDED(::StringCchCat(target.data(), target.size(), text));
+}
+
+bool query_module_directory(HMODULE module, PathBuffer& path) noexcept
+{
+    const auto length = ::GetModuleFileName(module, path.data(), static_cast<DWORD>(path.size()));
+    if (length == 0 || length >= path.size())
+    {
+        show_last_error(TEXT("GetModuleFileName failed"));
+        return false;
+    }
+
+    size_t last_separator = static_cast<size_t>(-1);
+    for (size_t index = 0; path[index] != TEXT('\0'); ++index)
+    {
+        if (path[index] == TEXT('\\') || path[index] == TEXT('/'))
+        {
+            last_separator = index;
+        }
+    }
+
+    if (last_separator == static_cast<size_t>(-1))
+    {
+        path[0] = TEXT('\0');
+    }
+    else
+    {
+        path[last_separator + 1] = TEXT('\0');
+    }
+
+    return true;
+}
+
+bool query_system_dll_path(PathBuffer& path, const TCHAR* dll_name) noexcept
+{
+    const auto length = ::GetSystemDirectory(path.data(), static_cast<UINT>(path.size()));
+    if (length == 0 || length >= path.size())
+    {
+        show_last_error(TEXT("GetSystemDirectory failed"));
+        return false;
+    }
+
+    if (!append_text(path, TEXT("\\")) || !append_text(path, dll_name))
+    {
+        show_path_too_long();
+        return false;
+    }
+
+    return true;
+}
+
+bool is_absolute_path(const TCHAR* path) noexcept
+{
+    return (path[0] != TEXT('\0') && path[1] == TEXT(':'))
+        || path[0] == TEXT('\\')
+        || path[0] == TEXT('/');
+}
+
+bool load_original_module_from_path(const PathBuffer& module_path) noexcept
+{
+    g_origin_module_handle = ::LoadLibrary(module_path.data());
+    if (g_origin_module_handle == nullptr)
+    {
+        show_last_error(TEXT("Cannot locate"), module_path.data());
+        return false;
+    }
+
+    return true;
+}
+
+void free_origin_module() noexcept
+{
+    if (g_origin_module_handle != nullptr)
+    {
+        ::FreeLibrary(g_origin_module_handle);
+        g_origin_module_handle = nullptr;
     }
 }
 
-static BOOL WINAPI load_original_module(HMODULE module)
+bool load_original_module(HMODULE module) noexcept
 {
 {{LOAD_ORIGIN_MODULE}}
 }
 
-static FARPROC WINAPI get_address(PCSTR proc_name)
+ForwarderAddress get_address(PCSTR proc_name) noexcept
 {
-    CHAR ordinal_name[64];
-    TCHAR message[MAX_PATH];
-    FARPROC address = GetProcAddress(g_origin_module_handle, proc_name);
-    if (!address)
+    OrdinalBuffer ordinal_name{};
+    MessageBuffer message{};
+    const auto address = ::GetProcAddress(g_origin_module_handle, proc_name);
+    if (address != nullptr)
     {
-        if (HIWORD(proc_name) == 0)
-        {
-            wsprintfA(ordinal_name, "#%d", proc_name);
-            proc_name = ordinal_name;
-        }
-        wsprintf(message, TEXT("Cannot locate export %hs."), proc_name);
-        MessageBox(NULL, message, TEXT("AheadLibEx"), MB_ICONSTOP);
-
-        ExitProcess(0);
+        return address;
     }
-    return address;
+
+    const char* display_name = proc_name;
+    if (HIWORD(proc_name) == 0)
+    {
+        ::StringCchPrintfA(ordinal_name.data(), ordinal_name.size(), "#%u", LOWORD(proc_name));
+        display_name = ordinal_name.data();
+    }
+
+    ::StringCchPrintf(
+        message.data(),
+        message.size(),
+        TEXT("Cannot locate export %hs."),
+        display_name);
+    show_message_box(message.data());
+    ::ExitProcess(0);
+    return nullptr;
 }
 
-static VOID WINAPI init_forwarders(void)
+void init_forwarders() noexcept
 {
 {{INIT_FORWARDERS}}
 }
 
-DWORD WINAPI patch_thread_proc(LPVOID context)
+DWORD WINAPI patch_thread_proc([[maybe_unused]] LPVOID context)
 {
-    UNREFERENCED_PARAMETER(context);
     // TODO: Put custom patch logic here when the target process matches.
-    MessageBox(NULL, TEXT("AheadLibExTest!"), TEXT("AheadLibEx"), MB_OK);
+    ::MessageBox(nullptr, TEXT("AheadLibExTest!"), kMessageCaption, MB_OK);
     return 0;
 }
 
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, PVOID reserved)
+class ScopedHandle final
 {
-    UNREFERENCED_PARAMETER(reserved);
-    if (reason == DLL_PROCESS_ATTACH)
+public:
+    explicit ScopedHandle(HANDLE handle) noexcept : handle_(handle) {}
+
+    ~ScopedHandle()
     {
-        DisableThreadLibraryCalls(module);
-        if (!load_original_module(module))
+        if (handle_ != nullptr)
+        {
+            ::CloseHandle(handle_);
+        }
+    }
+
+    ScopedHandle(const ScopedHandle&) = delete;
+    ScopedHandle& operator=(const ScopedHandle&) = delete;
+
+private:
+    HANDLE handle_;
+};
+
+void launch_patch_thread() noexcept
+{
+    // TODO: your patch process begins here.
+    ScopedHandle thread(::CreateThread(nullptr, 0, patch_thread_proc, nullptr, 0, nullptr));
+}
+
+} // namespace aheadlibex
+
+BOOL APIENTRY DllMain(HMODULE module, DWORD reason, [[maybe_unused]] PVOID reserved)
+{
+    switch (reason)
+    {
+    case DLL_PROCESS_ATTACH:
+        ::DisableThreadLibraryCalls(module);
+        if (!aheadlibex::load_original_module(module))
         {
             return FALSE;
         }
-        init_forwarders();
+        aheadlibex::init_forwarders();
+        aheadlibex::launch_patch_thread();
+        break;
+    case DLL_PROCESS_DETACH:
+        aheadlibex::free_origin_module();
+        break;
+    default:
+        break;
+    }
 
-        // TODO: your patch process begins here.
-        HANDLE thread = CreateThread(NULL, 0, patch_thread_proc, NULL, 0, NULL);
-        if (thread)
-        {
-            CloseHandle(thread);
-        }
-    }
-    else if (reason == DLL_PROCESS_DETACH)
-    {
-        free_origin_module();
-    }
     return TRUE;
 }

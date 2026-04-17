@@ -3,8 +3,8 @@ use std::{env, path::Path};
 use crate::dll;
 use crate::templates::{
     render_asm_x64, render_asm_x64_gas, render_asm_x86, render_asm_x86_gas, render_c, render_c_x64,
-    render_cmake_lists, render_def, render_filters, render_filters_2026, render_solution,
-    render_slnx_2026, render_user, render_user_2026, render_vcxproj, render_vcxproj_2026,
+    render_cmake_lists, render_def, render_filters, render_filters_2026, render_slnx_2026,
+    render_solution, render_user, render_user_2026, render_vcxproj, render_vcxproj_2026,
     OriginLoadMode, OriginLoadModeOwned, VsGuids, VsTemplateContext,
 };
 use eframe::egui;
@@ -157,11 +157,7 @@ pub fn generate(state: &mut UiState) {
     state.success = None;
     state.log = "Generating project...".into();
 
-    if !state.output_source
-        && !state.output_vs2022
-        && !state.output_vs2026
-        && !state.output_cmake
-    {
+    if !state.output_source && !state.output_vs2022 && !state.output_vs2026 && !state.output_cmake {
         state.log = "Please select at least one output target (Source/VS2022/VS2026/CMake)".into();
         state.success = Some(false);
         return;
@@ -233,9 +229,12 @@ pub fn generate(state: &mut UiState) {
                     origin,
                     &exports_for_write,
                 ) {
-                    Ok(_) => state.log.push_str("\n-- Source files written successfully --"),
+                    Ok(_) => state
+                        .log
+                        .push_str("\n-- Source files written successfully --"),
                     Err(err) => {
-                        state.log
+                        state
+                            .log
                             .push_str(&format!("\n-- Source write failed --\n{err}"));
                         state.success = Some(false);
                     }
@@ -316,7 +315,10 @@ pub fn generate_cli(
     origin_load_mode: OriginLoadModeOwned,
 ) -> anyhow::Result<Vec<String>> {
     if !dll_path.exists() {
-        return Err(anyhow::anyhow!("DLL path not found: {}", dll_path.display()));
+        return Err(anyhow::anyhow!(
+            "DLL path not found: {}",
+            dll_path.display()
+        ));
     }
 
     let info = dll::read_exports(dll_path)?;
@@ -327,8 +329,12 @@ pub fn generate_cli(
     let origin = origin_load_mode.as_borrowed();
     match target {
         OutputTarget::Source => write_source_files(dll_path, output_dir, is_x64, origin, &exports),
-        OutputTarget::Vs2022 => write_vs2022_project(dll_path, output_dir, is_x64, origin, &exports),
-        OutputTarget::Vs2026 => write_vs2026_project(dll_path, output_dir, is_x64, origin, &exports),
+        OutputTarget::Vs2022 => {
+            write_vs2022_project(dll_path, output_dir, is_x64, origin, &exports)
+        }
+        OutputTarget::Vs2026 => {
+            write_vs2026_project(dll_path, output_dir, is_x64, origin, &exports)
+        }
         OutputTarget::CMake => write_cmake_project(dll_path, output_dir, is_x64, origin, &exports),
     }
 }
@@ -375,7 +381,10 @@ fn ensure_default_origin_same_dir_name(state: &mut UiState, dll_path: &Path) {
     if !state.origin_same_dir_name.trim().is_empty() {
         return;
     }
-    let Some(stem) = dll_path.file_stem().map(|s| s.to_string_lossy().to_string()) else {
+    let Some(stem) = dll_path
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+    else {
         return;
     };
     if stem.is_empty() {
@@ -390,7 +399,9 @@ fn build_origin_load_mode(state: &UiState, dll_stem: &str) -> anyhow::Result<Ori
         OriginModeChoice::SameDir => {
             let name = state.origin_same_dir_name.trim();
             if name.is_empty() {
-                Ok(OriginLoadModeOwned::same_dir(format!("{dll_stem}_orig.dll")))
+                Ok(OriginLoadModeOwned::same_dir(format!(
+                    "{dll_stem}_orig.dll"
+                )))
             } else {
                 Ok(OriginLoadModeOwned::same_dir(name.to_string()))
             }
@@ -494,13 +505,21 @@ fn write_source_files(
     } else {
         None
     };
-    let asm_src_x86 = if is_x64 { None } else { Some(render_asm_x86(&ctx)) };
+    let asm_src_x86 = if is_x64 {
+        None
+    } else {
+        Some(render_asm_x86(&ctx))
+    };
     let asm_src_x86_gas = if is_x64 {
         None
     } else {
         Some(render_asm_x86_gas(&ctx))
     };
-    let asm_src_x64 = if is_x64 { Some(render_asm_x64(&ctx)) } else { None };
+    let asm_src_x64 = if is_x64 {
+        Some(render_asm_x64(&ctx))
+    } else {
+        None
+    };
     let asm_src_x64_gas = if is_x64 {
         Some(render_asm_x64_gas(&ctx))
     } else {
@@ -519,10 +538,10 @@ fn write_source_files(
     };
 
     if let Some(content) = c_src_x86 {
-        write_file(&format!("{}_x86.c", base_name), &content)?;
+        write_file(&format!("{}_x86.cpp", base_name), &content)?;
     }
     if let Some(content) = c_src_x64 {
-        write_file(&format!("{}_x64.c", base_name), &content)?;
+        write_file(&format!("{}_x64.cpp", base_name), &content)?;
     }
     if let Some(content) = asm_src_x86 {
         write_file(&format!("{}_x86_jump.asm", base_name), &content)?;
@@ -591,13 +610,21 @@ fn write_cmake_project(
     } else {
         None
     };
-    let asm_src_x86 = if is_x64 { None } else { Some(render_asm_x86(&ctx)) };
+    let asm_src_x86 = if is_x64 {
+        None
+    } else {
+        Some(render_asm_x86(&ctx))
+    };
     let asm_src_x86_gas = if is_x64 {
         None
     } else {
         Some(render_asm_x86_gas(&ctx))
     };
-    let asm_src_x64 = if is_x64 { Some(render_asm_x64(&ctx)) } else { None };
+    let asm_src_x64 = if is_x64 {
+        Some(render_asm_x64(&ctx))
+    } else {
+        None
+    };
     let asm_src_x64_gas = if is_x64 {
         Some(render_asm_x64_gas(&ctx))
     } else {
@@ -618,10 +645,10 @@ fn write_cmake_project(
     write_file("CMakeLists.txt", &cmake_lists)?;
 
     if let Some(content) = c_src_x86 {
-        write_file(&format!("{}_x86.c", base_name), &content)?;
+        write_file(&format!("{}_x86.cpp", base_name), &content)?;
     }
     if let Some(content) = c_src_x64 {
-        write_file(&format!("{}_x64.c", base_name), &content)?;
+        write_file(&format!("{}_x64.cpp", base_name), &content)?;
     }
     if let Some(content) = asm_src_x86 {
         write_file(&format!("{}_x86_jump.asm", base_name), &content)?;
@@ -694,7 +721,11 @@ fn write_vs2022_project(
     } else {
         None
     };
-    let asm_src_x86 = if is_x64 { None } else { Some(render_asm_x86(&ctx)) };
+    let asm_src_x86 = if is_x64 {
+        None
+    } else {
+        Some(render_asm_x86(&ctx))
+    };
     let asm_src_x64 = if is_x64 {
         Some(render_asm_x64(&ctx))
     } else {
@@ -717,10 +748,10 @@ fn write_vs2022_project(
     write_file(&format!("{}.vcxproj.filters", project_name), &filters)?;
     write_file(&format!("{}.vcxproj.user", project_name), &user)?;
     if let Some(content) = c_src_x86 {
-        write_file(&format!("{}_x86.c", base_name), &content)?;
+        write_file(&format!("{}_x86.cpp", base_name), &content)?;
     }
     if let Some(content) = c_src_x64 {
-        write_file(&format!("{}_x64.c", base_name), &content)?;
+        write_file(&format!("{}_x64.cpp", base_name), &content)?;
     }
     if let Some(content) = asm_src_x86 {
         write_file(&format!("{}_x86_jump.asm", base_name), &content)?;
@@ -787,7 +818,11 @@ fn write_vs2026_project(
     } else {
         None
     };
-    let asm_src_x86 = if is_x64 { None } else { Some(render_asm_x86(&ctx)) };
+    let asm_src_x86 = if is_x64 {
+        None
+    } else {
+        Some(render_asm_x86(&ctx))
+    };
     let asm_src_x64 = if is_x64 {
         Some(render_asm_x64(&ctx))
     } else {
@@ -810,10 +845,10 @@ fn write_vs2026_project(
     write_file(&format!("{}.vcxproj.filters", project_name), &filters)?;
     write_file(&format!("{}.vcxproj.user", project_name), &user)?;
     if let Some(content) = c_src_x86 {
-        write_file(&format!("{}_x86.c", base_name), &content)?;
+        write_file(&format!("{}_x86.cpp", base_name), &content)?;
     }
     if let Some(content) = c_src_x64 {
-        write_file(&format!("{}_x64.c", base_name), &content)?;
+        write_file(&format!("{}_x64.cpp", base_name), &content)?;
     }
     if let Some(content) = asm_src_x86 {
         write_file(&format!("{}_x86_jump.asm", base_name), &content)?;

@@ -13,8 +13,8 @@ AheadLibEx (Rust) is a Windows DLL proxy generator. It reads a target DLL, parse
 ## What Gets Generated
 - Export forwarding code based on the input DLL’s export table (names, ordinals, and forwarders)
 - Proxy sources
-  - x86: C proxy source
-  - x64: C proxy source + jump table (MASM for MSVC-like toolchains, GAS for GNU-like toolchains)
+  - x86: C++ proxy source
+  - x64: C++ proxy source + jump table (MASM for MSVC-like toolchains, GAS for GNU-like toolchains)
 - A `.def` file for controlling exports when the build system uses it
 - Optional project files (Visual Studio or CMake), depending on the selected output
 
@@ -74,8 +74,8 @@ cmake --build build --config Release
 The generated filenames are based on the input DLL stem (e.g. `version.dll` -> `version`).
 
 `source`:
-- x86: `<stem>_x86.c`, `<stem>_x86_jump.asm`, `<stem>_x86_jump.S`, `<stem>.def`
-- x64: `<stem>_x64.c`, `<stem>_x64_jump.asm`, `<stem>_x64_jump.S`, `<stem>.def`
+- x86: `<stem>_x86.cpp`, `<stem>_x86_jump.asm`, `<stem>_x86_jump.S`, `<stem>.def`
+- x64: `<stem>_x64.cpp`, `<stem>_x64_jump.asm`, `<stem>_x64_jump.S`, `<stem>.def`
 
 `cmake`:
 - `CMakeLists.txt`
@@ -84,21 +84,23 @@ The generated filenames are based on the input DLL stem (e.g. `version.dll` -> `
 `vs2022`:
 - `AheadlibEx_<stem>.sln`
 - `<stem>.vcxproj`, `<stem>.vcxproj.filters`, `<stem>.vcxproj.user`
-- x86: `<stem>_x86.c`, `<stem>_x86_jump.asm`, `<stem>.def`
-- x64: `<stem>_x64.c`, `<stem>_x64_jump.asm`, `<stem>.def`
+- x86: `<stem>_x86.cpp`, `<stem>_x86_jump.asm`, `<stem>.def`
+- x64: `<stem>_x64.cpp`, `<stem>_x64_jump.asm`, `<stem>.def`
 
 `vs2026`:
 - `AheadlibEx_<stem>.slnx`
 - `<stem>.vcxproj`, `<stem>.vcxproj.filters`, `<stem>.vcxproj.user`
-- x86: `<stem>_x86.c`, `<stem>_x86_jump.asm`, `<stem>.def`
-- x64: `<stem>_x64.c`, `<stem>_x64_jump.asm`, `<stem>.def`
+- x86: `<stem>_x86.cpp`, `<stem>_x86_jump.asm`, `<stem>.def`
+- x64: `<stem>_x64.cpp`, `<stem>_x64_jump.asm`, `<stem>.def`
 
 Notes:
 - `.asm` is MASM (MSVC/clang-cl toolchains).
 - `.S` is GAS (GNU-like toolchains). Visual Studio outputs only include `.asm`.
+- Generated Visual Studio and CMake outputs wire the `.def` file automatically. For `source`, pass the generated `.def` file to your linker when building.
 
 ## Notes
 - Export list is generated from the input DLL’s export table.
+- Ordinal-only exports and unusual export names are preserved in the generated `.def` and proxy initialization code.
 - xmake project generation has been removed (as of 2026-02-03).
 
 ## Author

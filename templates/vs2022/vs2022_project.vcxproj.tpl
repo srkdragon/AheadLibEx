@@ -8,6 +8,7 @@
   </PropertyGroup>
 {{CL_ITEM_GROUP}}
 {{ASM_ITEM_GROUP}}
+{{DEF_ITEM_GROUP}}
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
 {{CONFIG_GROUPS}}
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />

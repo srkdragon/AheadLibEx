@@ -13,8 +13,8 @@ English document: `README.md`。
 ## 生成内容
 - 基于输入 DLL 的导出表生成导出转发逻辑（导出名、序号、转发项）
 - 代理源码
-  - x86：仅生成 C 代理源码
-  - x64：生成 C 代理源码与跳转表（MSVC 类工具链生成 MASM，GNU 类工具链生成 GAS）
+  - x86：仅生成 C++ 代理源码
+  - x64：生成 C++ 代理源码与跳转表（MSVC 类工具链生成 MASM，GNU 类工具链生成 GAS）
 - 生成用于控制导出的 `.def` 文件（在对应构建系统下使用）
 - 按输出类型生成工程文件（Visual Studio 或 CMake）
 
@@ -68,8 +68,8 @@ cmake --build build --config Release
 生成文件名以输入 DLL 的文件名主体为基准（例如 `version.dll` 的主体为 `version`）。
 
 `source`：
-- x86：`<stem>_x86.c`、`<stem>_x86_jump.asm`、`<stem>_x86_jump.S`、`<stem>.def`
-- x64：`<stem>_x64.c`、`<stem>_x64_jump.asm`、`<stem>_x64_jump.S`、`<stem>.def`
+- x86：`<stem>_x86.cpp`、`<stem>_x86_jump.asm`、`<stem>_x86_jump.S`、`<stem>.def`
+- x64：`<stem>_x64.cpp`、`<stem>_x64_jump.asm`、`<stem>_x64_jump.S`、`<stem>.def`
 
 `cmake`：
 - `CMakeLists.txt`
@@ -78,21 +78,23 @@ cmake --build build --config Release
 `vs2022`：
 - `AheadlibEx_<stem>.sln`
 - `<stem>.vcxproj`、`<stem>.vcxproj.filters`、`<stem>.vcxproj.user`
-- x86：`<stem>_x86.c`、`<stem>_x86_jump.asm`、`<stem>.def`
-- x64：`<stem>_x64.c`、`<stem>_x64_jump.asm`、`<stem>.def`
+- x86：`<stem>_x86.cpp`、`<stem>_x86_jump.asm`、`<stem>.def`
+- x64：`<stem>_x64.cpp`、`<stem>_x64_jump.asm`、`<stem>.def`
 
 `vs2026`：
 - `AheadlibEx_<stem>.slnx`
 - `<stem>.vcxproj`、`<stem>.vcxproj.filters`、`<stem>.vcxproj.user`
-- x86：`<stem>_x86.c`、`<stem>_x86_jump.asm`、`<stem>.def`
-- x64：`<stem>_x64.c`、`<stem>_x64_jump.asm`、`<stem>.def`
+- x86：`<stem>_x86.cpp`、`<stem>_x86_jump.asm`、`<stem>.def`
+- x64：`<stem>_x64.cpp`、`<stem>_x64_jump.asm`、`<stem>.def`
 
 说明：
 - `.asm` 为 MASM（MSVC 与 clang-cl 工具链）。
 - `.S` 为 GAS（GNU 类工具链）。Visual Studio 输出仅包含 `.asm`。
+- 生成的 Visual Studio / CMake 项目会自动接入 `.def` 文件；若使用 `source` 输出，请在手动编译时将对应 `.def` 传给链接器。
 
 ## 备注
 - 导出列表来自输入 DLL 的导出表解析结果。
+- 纯序号导出和包含特殊字符的导出名会在生成的 `.def` 与代理初始化代码中保留。
 - 已于 2026-02-03 移除 xmake 输出目标与相关模板。
 
 ## 作者

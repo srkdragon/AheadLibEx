@@ -1,5 +1,11 @@
 use aheadlibex_rs::dll::ExportEntry;
-use aheadlibex_rs::templates::{render_c, render_c_x64, OriginLoadMode, VsGuids, VsTemplateContext};
+use aheadlibex_rs::templates::{
+    render_c, render_c_x64, OriginLoadMode, VsGuids, VsTemplateContext,
+};
+
+fn named_export(name: &str, ordinal: u16) -> ExportEntry {
+    ExportEntry::named(name, ordinal, None)
+}
 
 fn dummy_ctx<'a>(exports: &'a [ExportEntry], mode: OriginLoadMode<'a>) -> VsTemplateContext<'a> {
     let guids = VsGuids {
@@ -21,14 +27,12 @@ fn dummy_ctx<'a>(exports: &'a [ExportEntry], mode: OriginLoadMode<'a>) -> VsTemp
 
 #[test]
 fn system_dir_mode_uses_system_directory() {
-    let exports = vec![ExportEntry {
-        name: "Bar".to_string(),
-        ordinal: 1,
-        forwarder: None,
-    }];
+    let exports = vec![named_export("Bar", 1)];
     let ctx = dummy_ctx(&exports, OriginLoadMode::SystemDir);
 
     let c = render_c(&ctx);
+    assert!(c.contains("namespace aheadlibex {"));
+    assert!(c.contains("std::array<TCHAR, MAX_PATH>"));
     assert!(c.contains("load_original_module(HMODULE module)"));
     assert!(c.contains("load_original_module(module)"));
     assert!(c.contains("GetSystemDirectory("));
@@ -37,11 +41,7 @@ fn system_dir_mode_uses_system_directory() {
 
 #[test]
 fn same_dir_mode_uses_proxy_directory_and_original_name() {
-    let exports = vec![ExportEntry {
-        name: "Bar".to_string(),
-        ordinal: 1,
-        forwarder: None,
-    }];
+    let exports = vec![named_export("Bar", 1)];
     let ctx = dummy_ctx(
         &exports,
         OriginLoadMode::SameDir {
@@ -50,17 +50,14 @@ fn same_dir_mode_uses_proxy_directory_and_original_name() {
     );
 
     let c = render_c(&ctx);
+    assert!(c.contains("append_text(module_path, TEXT(\"Foo_orig.dll\"))"));
     assert!(c.contains("GetModuleFileName("));
     assert!(c.contains(r#"TEXT("Foo_orig.dll")"#));
 }
 
 #[test]
 fn custom_path_mode_embeds_origin_cfg() {
-    let exports = vec![ExportEntry {
-        name: "Bar".to_string(),
-        ordinal: 1,
-        forwarder: None,
-    }];
+    let exports = vec![named_export("Bar", 1)];
     let ctx = dummy_ctx(
         &exports,
         OriginLoadMode::CustomPath {
@@ -70,5 +67,6 @@ fn custom_path_mode_embeds_origin_cfg() {
 
     let c = render_c_x64(&ctx);
     assert!(c.contains(r#"origin_cfg[] = TEXT("C:\\path\\to\\Foo.dll")"#));
+    assert!(c.contains("is_absolute_path(origin_cfg)"));
+    assert!(c.contains("copy_text(module_path, origin_cfg)"));
 }
-
