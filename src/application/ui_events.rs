@@ -458,6 +458,21 @@ fn selected_targets(state: &UiState) -> Vec<String> {
     v
 }
 
+fn write_generated_file(
+    output_dir: &Path,
+    relative_path: &Path,
+    content: &str,
+    written: &mut Vec<String>,
+) -> anyhow::Result<()> {
+    let path = output_dir.join(relative_path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, content)?;
+    written.push(path.display().to_string());
+    Ok(())
+}
+
 fn write_source_files(
     dll_path: &Path,
     output_dir: &Path,
@@ -745,6 +760,8 @@ fn write_vs2022_project(
     let def_src = render_def(&ctx, is_x64);
 
     fs::create_dir_all(output_dir)?;
+    fs::create_dir_all(output_dir.join("src"))?;
+    fs::create_dir_all(output_dir.join("include"))?;
 
     let mut written = Vec::new();
     let mut write_file = |name: &str, content: &str| -> anyhow::Result<()> {
@@ -759,20 +776,55 @@ fn write_vs2022_project(
     write_file(&format!("{}.vcxproj.filters", project_name), &filters)?;
     write_file(&format!("{}.vcxproj.user", project_name), &user)?;
     if let Some(content) = c_src_x86 {
-        write_file(&format!("{}_x86.cpp", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x86.cpp", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
     if let Some(content) = c_src_x64 {
-        write_file(&format!("{}_x64.cpp", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x64.cpp", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
     if let Some(content) = asm_src_x86 {
-        write_file(&format!("{}_x86_jump.asm", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x86_jump.asm", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
     if let Some(content) = asm_src_x64 {
-        write_file(&format!("{}_x64_jump.asm", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x64_jump.asm", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
-    write_file(&format!("{}_patch.h", base_name), &patch_header)?;
-    write_file(&format!("{}_patch.cpp", base_name), &patch_cpp)?;
-    write_file(&format!("{}.def", base_name), &def_src)?;
+    write_generated_file(
+        output_dir,
+        Path::new("include").join(format!("{}_patch.h", base_name)).as_path(),
+        &patch_header,
+        &mut written,
+    )?;
+    write_generated_file(
+        output_dir,
+        Path::new("src").join(format!("{}_patch.cpp", base_name)).as_path(),
+        &patch_cpp,
+        &mut written,
+    )?;
+    write_generated_file(
+        output_dir,
+        Path::new("src").join(format!("{}.def", base_name)).as_path(),
+        &def_src,
+        &mut written,
+    )?;
 
     Ok(written)
 }
@@ -846,6 +898,8 @@ fn write_vs2026_project(
     let def_src = render_def(&ctx, is_x64);
 
     fs::create_dir_all(output_dir)?;
+    fs::create_dir_all(output_dir.join("src"))?;
+    fs::create_dir_all(output_dir.join("include"))?;
 
     let mut written = Vec::new();
     let mut write_file = |name: &str, content: &str| -> anyhow::Result<()> {
@@ -860,20 +914,128 @@ fn write_vs2026_project(
     write_file(&format!("{}.vcxproj.filters", project_name), &filters)?;
     write_file(&format!("{}.vcxproj.user", project_name), &user)?;
     if let Some(content) = c_src_x86 {
-        write_file(&format!("{}_x86.cpp", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x86.cpp", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
     if let Some(content) = c_src_x64 {
-        write_file(&format!("{}_x64.cpp", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x64.cpp", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
     if let Some(content) = asm_src_x86 {
-        write_file(&format!("{}_x86_jump.asm", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x86_jump.asm", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
     if let Some(content) = asm_src_x64 {
-        write_file(&format!("{}_x64_jump.asm", base_name), &content)?;
+        write_generated_file(
+            output_dir,
+            Path::new("src").join(format!("{}_x64_jump.asm", base_name)).as_path(),
+            &content,
+            &mut written,
+        )?;
     }
-    write_file(&format!("{}_patch.h", base_name), &patch_header)?;
-    write_file(&format!("{}_patch.cpp", base_name), &patch_cpp)?;
-    write_file(&format!("{}.def", base_name), &def_src)?;
+    write_generated_file(
+        output_dir,
+        Path::new("include").join(format!("{}_patch.h", base_name)).as_path(),
+        &patch_header,
+        &mut written,
+    )?;
+    write_generated_file(
+        output_dir,
+        Path::new("src").join(format!("{}_patch.cpp", base_name)).as_path(),
+        &patch_cpp,
+        &mut written,
+    )?;
+    write_generated_file(
+        output_dir,
+        Path::new("src").join(format!("{}.def", base_name)).as_path(),
+        &def_src,
+        &mut written,
+    )?;
 
     Ok(written)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn unique_temp_dir(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("aheadlibex-rs-{label}-{}", Uuid::new_v4()))
+    }
+
+    #[test]
+    fn visual_studio_outputs_use_src_and_include_directories() {
+        let exports = vec![dll::ExportEntry::named("Foo", 1, None)];
+        let dll_path = Path::new("example.dll");
+
+        let vs2022_dir = unique_temp_dir("vs2022");
+        let vs2026_dir = unique_temp_dir("vs2026");
+
+        let written_2022 = write_vs2022_project(
+            dll_path,
+            &vs2022_dir,
+            false,
+            OriginLoadMode::SystemDir,
+            &exports,
+        )
+        .expect("vs2022 generation should succeed");
+        let written_2026 = write_vs2026_project(
+            dll_path,
+            &vs2026_dir,
+            true,
+            OriginLoadMode::SystemDir,
+            &exports,
+        )
+        .expect("vs2026 generation should succeed");
+
+        assert!(vs2022_dir.join("example.vcxproj").exists());
+        assert!(vs2022_dir.join("src").join("example_x86.cpp").exists());
+        assert!(vs2022_dir.join("src").join("example_patch.cpp").exists());
+        assert!(vs2022_dir.join("src").join("example_x86_jump.asm").exists());
+        assert!(vs2022_dir.join("src").join("example.def").exists());
+        assert!(vs2022_dir.join("include").join("example_patch.h").exists());
+        assert!(
+            written_2022
+                .iter()
+                .any(|path| path.ends_with(r"src\example_patch.cpp"))
+        );
+        assert!(
+            written_2022
+                .iter()
+                .any(|path| path.ends_with(r"include\example_patch.h"))
+        );
+
+        assert!(vs2026_dir.join("example.vcxproj").exists());
+        assert!(vs2026_dir.join("src").join("example_x64.cpp").exists());
+        assert!(vs2026_dir.join("src").join("example_patch.cpp").exists());
+        assert!(vs2026_dir.join("src").join("example_x64_jump.asm").exists());
+        assert!(vs2026_dir.join("src").join("example.def").exists());
+        assert!(vs2026_dir.join("include").join("example_patch.h").exists());
+        assert!(
+            written_2026
+                .iter()
+                .any(|path| path.ends_with(r"src\example_x64.cpp"))
+        );
+        assert!(
+            written_2026
+                .iter()
+                .any(|path| path.ends_with(r"include\example_patch.h"))
+        );
+
+        let _ = fs::remove_dir_all(&vs2022_dir);
+        let _ = fs::remove_dir_all(&vs2026_dir);
+    }
 }

@@ -1,8 +1,8 @@
 use aheadlibex_rs::dll::ExportEntry;
 use aheadlibex_rs::templates::{
-    render_asm_x64, render_asm_x64_gas, render_asm_x86, render_c, render_c_x64, render_cmake_lists,
-    render_def, render_patch_cpp, render_patch_header, render_vcxproj, OriginLoadMode, VsGuids,
-    VsTemplateContext,
+    render_asm_x64, render_asm_x64_gas, render_asm_x86, render_c, render_c_x64,
+    render_cmake_lists, render_def, render_filters, render_patch_cpp, render_patch_header,
+    render_vcxproj, render_vcxproj_2026, OriginLoadMode, VsGuids, VsTemplateContext,
 };
 
 fn named_export(name: &str, ordinal: u16) -> ExportEntry {
@@ -122,19 +122,33 @@ fn win32_vcxproj_enables_masm_safeseh() {
     let ctx = dummy_ctx(&exports);
 
     let win32 = render_vcxproj(&ctx, false);
-    assert!(win32.contains("<ClCompile Include=\"Foo_x86.cpp\" />"));
-    assert!(win32.contains("<ClCompile Include=\"Foo_patch.cpp\" />"));
-    assert!(win32.contains("<ClInclude Include=\"Foo_patch.h\" />"));
-    assert!(win32.contains("<None Include=\"Foo.def\" />"));
-    assert!(win32.contains("<ModuleDefinitionFile>Foo.def</ModuleDefinitionFile>"));
+    assert!(win32.contains("<ClCompile Include=\"src\\Foo_x86.cpp\" />"));
+    assert!(win32.contains("<ClCompile Include=\"src\\Foo_patch.cpp\" />"));
+    assert!(win32.contains("<ClInclude Include=\"include\\Foo_patch.h\" />"));
+    assert!(win32.contains("<None Include=\"src\\Foo.def\" />"));
+    assert!(win32.contains("<ModuleDefinitionFile>src\\Foo.def</ModuleDefinitionFile>"));
+    assert!(win32.contains(
+        "<AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>"
+    ));
     assert!(win32.contains("<LanguageStandard>stdcpp17</LanguageStandard>"));
     assert!(win32.contains("<UseSafeExceptionHandlers>true</UseSafeExceptionHandlers>"));
     assert!(!win32.contains("/SAFESEH:NO"));
 
     let x64 = render_vcxproj(&ctx, true);
-    assert!(x64.contains("<ClCompile Include=\"Foo_x64.cpp\" />"));
-    assert!(x64.contains("<ClCompile Include=\"Foo_patch.cpp\" />"));
+    assert!(x64.contains("<ClCompile Include=\"src\\Foo_x64.cpp\" />"));
+    assert!(x64.contains("<ClCompile Include=\"src\\Foo_patch.cpp\" />"));
     assert!(!x64.contains("UseSafeExceptionHandlers"));
+
+    let filters = render_filters(&ctx, false);
+    assert!(filters.contains("<ClCompile Include=\"src\\Foo_x86.cpp\">"));
+    assert!(filters.contains("<ClCompile Include=\"src\\Foo_patch.cpp\">"));
+    assert!(filters.contains("<ClInclude Include=\"include\\Foo_patch.h\">"));
+    assert!(filters.contains("<None Include=\"src\\Foo.def\">"));
+
+    let vs2026 = render_vcxproj_2026(&ctx, false);
+    assert!(vs2026.contains("<ClCompile Include=\"src\\Foo_x86.cpp\" />"));
+    assert!(vs2026.contains("<ClInclude Include=\"include\\Foo_patch.h\" />"));
+    assert!(vs2026.contains("<ModuleDefinitionFile>src\\Foo.def</ModuleDefinitionFile>"));
 }
 
 #[test]

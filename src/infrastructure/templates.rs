@@ -374,6 +374,38 @@ fn patch_header_name(base: &str) -> String {
     format!("{base}_patch.h")
 }
 
+fn vs_src_path(file: &str) -> String {
+    format!(r"src\{file}")
+}
+
+fn vs_include_path(file: &str) -> String {
+    format!(r"include\{file}")
+}
+
+fn vs_runtime_cpp_path(base: &str, is_x64: bool) -> String {
+    vs_src_path(&runtime_cpp_name(base, is_x64))
+}
+
+fn vs_patch_cpp_path(base: &str) -> String {
+    vs_src_path(&patch_cpp_name(base))
+}
+
+fn vs_patch_header_path(base: &str) -> String {
+    vs_include_path(&patch_header_name(base))
+}
+
+fn vs_asm_path(base: &str, is_x64: bool) -> String {
+    if is_x64 {
+        vs_src_path(&format!("{base}_x64_jump.asm"))
+    } else {
+        vs_src_path(&format!("{base}_x86_jump.asm"))
+    }
+}
+
+fn vs_def_path(base: &str) -> String {
+    vs_src_path(&format!("{base}.def"))
+}
+
 fn project_config_entries(is_x64: bool) -> String {
     if is_x64 {
         r#"    <ProjectConfiguration Include="Debug|x64">
@@ -401,8 +433,8 @@ fn project_config_entries(is_x64: bool) -> String {
 }
 
 fn cl_item_group(base: &str, is_x64: bool) -> String {
-    let runtime_cpp = runtime_cpp_name(base, is_x64);
-    let patch_cpp = patch_cpp_name(base);
+    let runtime_cpp = vs_runtime_cpp_path(base, is_x64);
+    let patch_cpp = vs_patch_cpp_path(base);
     format!(
         r#"  <ItemGroup>
     <ClCompile Include="{runtime_cpp}" />
@@ -413,28 +445,22 @@ fn cl_item_group(base: &str, is_x64: bool) -> String {
 }
 
 fn asm_item_group(base: &str, is_x64: bool) -> String {
-    if is_x64 {
-        format!(
-            r#"  <ItemGroup>
-     <MASM Include="{base}_x64_jump.asm" />
-   </ItemGroup>
-"#
-        )
-    } else {
-        format!(
-            r#"  <ItemGroup>
-    <MASM Include="{base}_x86_jump.asm" />
+    let asm_file = vs_asm_path(base, is_x64);
+    format!(
+        r#"  <ItemGroup>
+    <MASM Include="{asm_file}" />
   </ItemGroup>
 "#
-        )
-    }
+    )
 }
 
 fn def_item_group(base: &str) -> String {
+    let patch_header = vs_patch_header_path(base);
+    let def_file = vs_def_path(base);
     format!(
         r#"  <ItemGroup>
-    <ClInclude Include="{base}_patch.h" />
-    <None Include="{base}.def" />
+    <ClInclude Include="{patch_header}" />
+    <None Include="{def_file}" />
   </ItemGroup>
 "#
     )
@@ -518,6 +544,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool, def_file: &str) -> String
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -537,6 +564,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool, def_file: &str) -> String
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -562,6 +590,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool, def_file: &str) -> String
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -584,6 +613,7 @@ fn item_definitions(exports_macro: &str, is_x64: bool, def_file: &str) -> String
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;{EXPORTS_MACRO};_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -639,14 +669,11 @@ fn extension_targets(is_x64: bool) -> String {
 }
 
 fn filter_itemgroups(base: &str, is_x64: bool) -> String {
-    let runtime_cpp = runtime_cpp_name(base, is_x64);
-    let patch_cpp = patch_cpp_name(base);
-    let patch_header = patch_header_name(base);
-    let asm_file = if is_x64 {
-        format!("{base}_x64_jump.asm")
-    } else {
-        format!("{base}_x86_jump.asm")
-    };
+    let runtime_cpp = vs_runtime_cpp_path(base, is_x64);
+    let patch_cpp = vs_patch_cpp_path(base);
+    let patch_header = vs_patch_header_path(base);
+    let asm_file = vs_asm_path(base, is_x64);
+    let def_file = vs_def_path(base);
 
     format!(
         r#"  <ItemGroup>
@@ -668,7 +695,7 @@ fn filter_itemgroups(base: &str, is_x64: bool) -> String {
      </ClInclude>
    </ItemGroup>
    <ItemGroup>
-     <None Include="{base}.def">
+     <None Include="{def_file}">
        <Filter>Source Files</Filter>
      </None>
    </ItemGroup>
@@ -700,7 +727,7 @@ pub fn render_solution(ctx: &VsTemplateContext, is_x64: bool) -> String {
 
 pub fn render_vcxproj(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let exports_macro = exports_macro(ctx.project_name);
-    let def_file = format!("{}.def", ctx.base_name);
+    let def_file = vs_def_path(ctx.base_name);
     fill(
         TPL_VCXPROJ,
         &[
@@ -724,7 +751,7 @@ pub fn render_vcxproj(ctx: &VsTemplateContext, is_x64: bool) -> String {
 
 pub fn render_vcxproj_2026(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let exports_macro = exports_macro(ctx.project_name);
-    let def_file = format!("{}.def", ctx.base_name);
+    let def_file = vs_def_path(ctx.base_name);
     fill(
         TPL_VCXPROJ_2026,
         &[

@@ -78,20 +78,23 @@ cmake --build build --config Release
 `vs2022`：
 - `AheadlibEx_<stem>.sln`
 - `<stem>.vcxproj`、`<stem>.vcxproj.filters`、`<stem>.vcxproj.user`
-- x86：`<stem>_x86.cpp`、`<stem>_patch.cpp`、`<stem>_patch.h`、`<stem>_x86_jump.asm`、`<stem>.def`
-- x64：`<stem>_x64.cpp`、`<stem>_patch.cpp`、`<stem>_patch.h`、`<stem>_x64_jump.asm`、`<stem>.def`
+- `src/`：x86 为 `<stem>_x86.cpp`、`<stem>_patch.cpp`、`<stem>_x86_jump.asm`、`<stem>.def`
+- `src/`：x64 为 `<stem>_x64.cpp`、`<stem>_patch.cpp`、`<stem>_x64_jump.asm`、`<stem>.def`
+- `include/`：`<stem>_patch.h`
 
 `vs2026`：
 - `AheadlibEx_<stem>.slnx`
 - `<stem>.vcxproj`、`<stem>.vcxproj.filters`、`<stem>.vcxproj.user`
-- x86：`<stem>_x86.cpp`、`<stem>_patch.cpp`、`<stem>_patch.h`、`<stem>_x86_jump.asm`、`<stem>.def`
-- x64：`<stem>_x64.cpp`、`<stem>_patch.cpp`、`<stem>_patch.h`、`<stem>_x64_jump.asm`、`<stem>.def`
+- `src/`：x86 为 `<stem>_x86.cpp`、`<stem>_patch.cpp`、`<stem>_x86_jump.asm`、`<stem>.def`
+- `src/`：x64 为 `<stem>_x64.cpp`、`<stem>_patch.cpp`、`<stem>_x64_jump.asm`、`<stem>.def`
+- `include/`：`<stem>_patch.h`
 
 说明：
 - `.asm` 为 MASM（MSVC 与 clang-cl 工具链）。
 - `.S` 为 GAS（GNU 类工具链）。Visual Studio 输出仅包含 `.asm`。
 - 生成的 Visual Studio / CMake 项目会自动接入 `.def` 文件；若使用 `source` 输出，请在手动编译时将对应 `.def` 传给链接器。
 - 用户补丁逻辑集中在 `<stem>_patch.cpp`；代理运行时代码只负责加载原 DLL、转发导出与入口流程。
+- Visual Studio 输出会将 `.cpp`、`.asm`、`.def` 放在 `src/`，将生成的头文件放在 `include/`。
 - `<stem>_patch.cpp` 提供 `configure_patch()`、`on_process_attach()`、`on_worker_thread()` 与 `on_process_detach()`。可通过 `configure_patch()` 同时启用 `run_on_process_attach`、`create_worker_thread`，也可以只启用其中之一。
 - `on_process_attach()` 适合必须在 `DLL_PROCESS_ATTACH` 内执行、且满足 loader lock 限制的初始化；`on_worker_thread()` 适合放置阻塞或长期运行的补丁逻辑。
 - 对于贯穿整个进程生命周期的补丁逻辑，可监听 `aheadlibex::stop_event()` / `aheadlibex::stop_requested()`；运行时代码会在 `DLL_PROCESS_DETACH` 时先发出停止信号，再调用 `on_process_detach()` 便于优雅清理。

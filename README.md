@@ -84,20 +84,23 @@ The generated filenames are based on the input DLL stem (e.g. `version.dll` -> `
 `vs2022`:
 - `AheadlibEx_<stem>.sln`
 - `<stem>.vcxproj`, `<stem>.vcxproj.filters`, `<stem>.vcxproj.user`
-- x86: `<stem>_x86.cpp`, `<stem>_patch.cpp`, `<stem>_patch.h`, `<stem>_x86_jump.asm`, `<stem>.def`
-- x64: `<stem>_x64.cpp`, `<stem>_patch.cpp`, `<stem>_patch.h`, `<stem>_x64_jump.asm`, `<stem>.def`
+- `src/`: x86 `<stem>_x86.cpp`, `<stem>_patch.cpp`, `<stem>_x86_jump.asm`, `<stem>.def`
+- `src/`: x64 `<stem>_x64.cpp`, `<stem>_patch.cpp`, `<stem>_x64_jump.asm`, `<stem>.def`
+- `include/`: `<stem>_patch.h`
 
 `vs2026`:
 - `AheadlibEx_<stem>.slnx`
 - `<stem>.vcxproj`, `<stem>.vcxproj.filters`, `<stem>.vcxproj.user`
-- x86: `<stem>_x86.cpp`, `<stem>_patch.cpp`, `<stem>_patch.h`, `<stem>_x86_jump.asm`, `<stem>.def`
-- x64: `<stem>_x64.cpp`, `<stem>_patch.cpp`, `<stem>_patch.h`, `<stem>_x64_jump.asm`, `<stem>.def`
+- `src/`: x86 `<stem>_x86.cpp`, `<stem>_patch.cpp`, `<stem>_x86_jump.asm`, `<stem>.def`
+- `src/`: x64 `<stem>_x64.cpp`, `<stem>_patch.cpp`, `<stem>_x64_jump.asm`, `<stem>.def`
+- `include/`: `<stem>_patch.h`
 
 Notes:
 - `.asm` is MASM (MSVC/clang-cl toolchains).
 - `.S` is GAS (GNU-like toolchains). Visual Studio outputs only include `.asm`.
 - Generated Visual Studio and CMake outputs wire the `.def` file automatically. For `source`, pass the generated `.def` file to your linker when building.
 - User patch logic lives in `<stem>_patch.cpp`; the runtime proxy source stays focused on loading/forwarding and entrypoint plumbing.
+- Visual Studio outputs place `.cpp`, `.asm`, and `.def` files in `src/`, and generated headers in `include/`.
 - `<stem>_patch.cpp` exposes `configure_patch()`, `on_process_attach()`, `on_worker_thread()`, and `on_process_detach()`. `configure_patch()` lets you enable `run_on_process_attach`, `create_worker_thread`, or both at the same time.
 - Use `on_process_attach()` for loader-lock-safe setup that must begin inside `DLL_PROCESS_ATTACH`; use `on_worker_thread()` for blocking or long-running work outside DllMain.
 - Long-lived patch logic can watch `aheadlibex::stop_event()` / `aheadlibex::stop_requested()`. The runtime signals that event before `on_process_detach()` so your patch can stop cleanly during `DLL_PROCESS_DETACH`.
