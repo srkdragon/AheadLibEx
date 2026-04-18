@@ -97,6 +97,14 @@ const TPL_C_X64: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/templates/common/proxy_x64.c.tpl"
 ));
+const TPL_PATCH_HEADER: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/templates/common/proxy_patch.h.tpl"
+));
+const TPL_PATCH_CPP: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/templates/common/proxy_patch.cpp.tpl"
+));
 const TPL_ASM_X86: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/templates/common/proxy_x86_jump.asm.tpl"
@@ -350,6 +358,22 @@ fn solution_configs(is_x64: bool, project_guid: &str) -> (String, String) {
     }
 }
 
+fn runtime_cpp_name(base: &str, is_x64: bool) -> String {
+    if is_x64 {
+        format!("{base}_x64.cpp")
+    } else {
+        format!("{base}_x86.cpp")
+    }
+}
+
+fn patch_cpp_name(base: &str) -> String {
+    format!("{base}_patch.cpp")
+}
+
+fn patch_header_name(base: &str) -> String {
+    format!("{base}_patch.h")
+}
+
 fn project_config_entries(is_x64: bool) -> String {
     if is_x64 {
         r#"    <ProjectConfiguration Include="Debug|x64">
@@ -377,21 +401,15 @@ fn project_config_entries(is_x64: bool) -> String {
 }
 
 fn cl_item_group(base: &str, is_x64: bool) -> String {
-    if is_x64 {
-        format!(
-            r#"  <ItemGroup>
-    <ClCompile Include="{base}_x64.cpp" />
+    let runtime_cpp = runtime_cpp_name(base, is_x64);
+    let patch_cpp = patch_cpp_name(base);
+    format!(
+        r#"  <ItemGroup>
+    <ClCompile Include="{runtime_cpp}" />
+    <ClCompile Include="{patch_cpp}" />
   </ItemGroup>
 "#
-        )
-    } else {
-        format!(
-            r#"  <ItemGroup>
-    <ClCompile Include="{base}_x86.cpp" />
-  </ItemGroup>
-"#
-        )
-    }
+    )
 }
 
 fn asm_item_group(base: &str, is_x64: bool) -> String {
@@ -415,6 +433,7 @@ fn asm_item_group(base: &str, is_x64: bool) -> String {
 fn def_item_group(base: &str) -> String {
     format!(
         r#"  <ItemGroup>
+    <ClInclude Include="{base}_patch.h" />
     <None Include="{base}.def" />
   </ItemGroup>
 "#
@@ -620,17 +639,33 @@ fn extension_targets(is_x64: bool) -> String {
 }
 
 fn filter_itemgroups(base: &str, is_x64: bool) -> String {
-    if is_x64 {
-        format!(
-            r#"  <ItemGroup>
-     <ClCompile Include="{base}_x64.cpp">
+    let runtime_cpp = runtime_cpp_name(base, is_x64);
+    let patch_cpp = patch_cpp_name(base);
+    let patch_header = patch_header_name(base);
+    let asm_file = if is_x64 {
+        format!("{base}_x64_jump.asm")
+    } else {
+        format!("{base}_x86_jump.asm")
+    };
+
+    format!(
+        r#"  <ItemGroup>
+     <ClCompile Include="{runtime_cpp}">
+       <Filter>Source Files</Filter>
+     </ClCompile>
+     <ClCompile Include="{patch_cpp}">
        <Filter>Source Files</Filter>
      </ClCompile>
    </ItemGroup>
    <ItemGroup>
-     <MASM Include="{base}_x64_jump.asm">
+     <MASM Include="{asm_file}">
        <Filter>Source Files</Filter>
      </MASM>
+   </ItemGroup>
+   <ItemGroup>
+     <ClInclude Include="{patch_header}">
+       <Filter>Header Files</Filter>
+     </ClInclude>
    </ItemGroup>
    <ItemGroup>
      <None Include="{base}.def">
@@ -638,27 +673,7 @@ fn filter_itemgroups(base: &str, is_x64: bool) -> String {
      </None>
    </ItemGroup>
 "#
-        )
-    } else {
-        format!(
-            r#"  <ItemGroup>
-     <ClCompile Include="{base}_x86.cpp">
-       <Filter>Source Files</Filter>
-     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="{base}_x86_jump.asm">
-      <Filter>Source Files</Filter>
-    </MASM>
-   </ItemGroup>
-  <ItemGroup>
-    <None Include="{base}.def">
-      <Filter>Source Files</Filter>
-    </None>
-  </ItemGroup>
-"#
-        )
-    }
+    )
 }
 
 fn slnx_platforms(is_x64: bool) -> String {
@@ -786,6 +801,17 @@ pub fn render_slnx_2026(ctx: &VsTemplateContext, is_x64: bool) -> String {
     )
 }
 
+pub fn render_patch_header(ctx: &VsTemplateContext) -> String {
+    fill(TPL_PATCH_HEADER, &[("BASE", ctx.base_name.to_string())])
+}
+
+pub fn render_patch_cpp(ctx: &VsTemplateContext) -> String {
+    fill(
+        TPL_PATCH_CPP,
+        &[("PATCH_HEADER", patch_header_name(ctx.base_name))],
+    )
+}
+
 pub fn render_c(ctx: &VsTemplateContext) -> String {
     let exports = prepare_exports(ctx.exports);
 
@@ -823,6 +849,7 @@ pub fn render_c(ctx: &VsTemplateContext) -> String {
         TPL_C_X86,
         &[
             ("DLL_NAME", ctx.dll_name.to_string()),
+            ("PATCH_HEADER", patch_header_name(ctx.base_name)),
             ("LOAD_ORIGIN_MODULE", render_load_origin_module(ctx)),
             ("EXPORT_PRAGMAS", String::new()),
             ("FORWARD_DECLS", forward_decls),
@@ -866,6 +893,7 @@ pub fn render_c_x64(ctx: &VsTemplateContext) -> String {
         TPL_C_X64,
         &[
             ("DLL_NAME", ctx.dll_name.to_string()),
+            ("PATCH_HEADER", patch_header_name(ctx.base_name)),
             ("LOAD_ORIGIN_MODULE", render_load_origin_module(ctx)),
             ("EXPORT_PRAGMAS", String::new()),
             ("FORWARD_DECLS", forward_decls),
@@ -1012,15 +1040,15 @@ pub fn render_def(ctx: &VsTemplateContext, is_x64: bool) -> String {
 pub fn render_cmake_lists(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let cmake_project_name = sanitize_build_target_name(&format!("AheadLibEx_{}", ctx.base_name));
 
-    let (cpp_src, asm_masm, asm_gas) = if is_x64 {
+    let (runtime_cpp, asm_masm, asm_gas) = if is_x64 {
         (
-            format!("{}_x64.cpp", ctx.base_name),
+            runtime_cpp_name(ctx.base_name, true),
             format!("{}_x64_jump.asm", ctx.base_name),
             format!("{}_x64_jump.S", ctx.base_name),
         )
     } else {
         (
-            format!("{}_x86.cpp", ctx.base_name),
+            runtime_cpp_name(ctx.base_name, false),
             format!("{}_x86_jump.asm", ctx.base_name),
             format!("{}_x86_jump.S", ctx.base_name),
         )
@@ -1032,7 +1060,8 @@ pub fn render_cmake_lists(ctx: &VsTemplateContext, is_x64: bool) -> String {
             ("CMAKE_PROJECT_NAME", cmake_project_name),
             ("BASE", ctx.base_name.to_string()),
             ("OUTPUT_NAME", ctx.base_name.to_string()),
-            ("CPP_SRC", cpp_src),
+            ("RUNTIME_CPP_SRC", runtime_cpp),
+            ("PATCH_CPP_SRC", patch_cpp_name(ctx.base_name)),
             ("ASM_MASM_SRC", asm_masm),
             ("ASM_GAS_SRC", asm_gas),
             ("DEF_SRC", format!("{}.def", ctx.base_name)),

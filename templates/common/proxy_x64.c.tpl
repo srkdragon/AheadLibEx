@@ -7,6 +7,8 @@
 #include <windows.h>
 #include <strsafe.h>
 
+#include "{{PATCH_HEADER}}"
+
 {{EXPORT_PRAGMAS}}
 
 extern "C" {
@@ -23,6 +25,30 @@ using OrdinalBuffer = std::array<char, 64>;
 constexpr TCHAR kMessageCaption[] = TEXT("AheadLibEx");
 
 HMODULE g_origin_module_handle = nullptr;
+HMODULE g_proxy_module_handle = nullptr;
+HANDLE g_patch_stop_event = nullptr;
+bool g_user_patch_started = false;
+
+HMODULE proxy_module() noexcept
+{
+    return g_proxy_module_handle;
+}
+
+HMODULE original_module() noexcept
+{
+    return g_origin_module_handle;
+}
+
+HANDLE stop_event() noexcept
+{
+    return g_patch_stop_event;
+}
+
+bool stop_requested() noexcept
+{
+    return g_patch_stop_event != nullptr
+        && ::WaitForSingleObject(g_patch_stop_event, 0) == WAIT_OBJECT_0;
+}
 
 void show_message_box(const TCHAR* message, UINT flags = MB_ICONSTOP) noexcept
 {
@@ -145,6 +171,35 @@ void free_origin_module() noexcept
     }
 }
 
+bool create_patch_stop_event() noexcept
+{
+    g_patch_stop_event = ::CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    if (g_patch_stop_event == nullptr)
+    {
+        show_last_error(TEXT("CreateEvent failed"));
+        return false;
+    }
+
+    return true;
+}
+
+void signal_patch_stop() noexcept
+{
+    if (g_patch_stop_event != nullptr)
+    {
+        ::SetEvent(g_patch_stop_event);
+    }
+}
+
+void close_patch_stop_event() noexcept
+{
+    if (g_patch_stop_event != nullptr)
+    {
+        ::CloseHandle(g_patch_stop_event);
+        g_patch_stop_event = nullptr;
+    }
+}
+
 bool load_original_module(HMODULE module) noexcept
 {
 {{LOAD_ORIGIN_MODULE}}
@@ -184,9 +239,7 @@ void init_forwarders() noexcept
 
 DWORD WINAPI patch_thread_proc([[maybe_unused]] LPVOID context)
 {
-    // TODO: Put custom patch logic here when the target process matches.
-    ::MessageBox(nullptr, TEXT("AheadLibExTest!"), kMessageCaption, MB_OK);
-    return 0;
+    return aheadlibex::user::on_worker_thread() ? 0 : 1;
 }
 
 class ScopedHandle final
@@ -209,10 +262,43 @@ private:
     HANDLE handle_;
 };
 
-void launch_patch_thread() noexcept
+bool launch_patch_thread() noexcept
 {
-    // TODO: your patch process begins here.
-    ScopedHandle thread(::CreateThread(nullptr, 0, patch_thread_proc, nullptr, 0, nullptr));
+    const auto thread = ::CreateThread(nullptr, 0, patch_thread_proc, nullptr, 0, nullptr);
+    if (thread == nullptr)
+    {
+        show_last_error(TEXT("CreateThread failed"));
+        return false;
+    }
+
+    ScopedHandle scoped_thread(thread);
+    return true;
+}
+
+bool start_user_patch() noexcept
+{
+    const auto lifecycle = aheadlibex::user::configure_patch();
+    g_user_patch_started = false;
+
+    if (lifecycle.run_on_process_attach)
+    {
+        if (!aheadlibex::user::on_process_attach())
+        {
+            return false;
+        }
+        g_user_patch_started = true;
+    }
+
+    if (lifecycle.create_worker_thread)
+    {
+        if (!launch_patch_thread())
+        {
+            return false;
+        }
+        g_user_patch_started = true;
+    }
+
+    return true;
 }
 
 } // namespace aheadlibex
@@ -222,15 +308,27 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, [[maybe_unused]] PVOID reser
     switch (reason)
     {
     case DLL_PROCESS_ATTACH:
+        aheadlibex::g_proxy_module_handle = module;
         ::DisableThreadLibraryCalls(module);
         if (!aheadlibex::load_original_module(module))
         {
             return FALSE;
         }
         aheadlibex::init_forwarders();
-        aheadlibex::launch_patch_thread();
+        if (!aheadlibex::create_patch_stop_event() || !aheadlibex::start_user_patch())
+        {
+            aheadlibex::close_patch_stop_event();
+            aheadlibex::free_origin_module();
+            return FALSE;
+        }
         break;
     case DLL_PROCESS_DETACH:
+        aheadlibex::signal_patch_stop();
+        if (aheadlibex::g_user_patch_started)
+        {
+            aheadlibex::user::on_process_detach(reserved != nullptr);
+        }
+        aheadlibex::close_patch_stop_event();
         aheadlibex::free_origin_module();
         break;
     default:

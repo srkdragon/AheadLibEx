@@ -3,9 +3,10 @@ use std::{env, path::Path};
 use crate::dll;
 use crate::templates::{
     render_asm_x64, render_asm_x64_gas, render_asm_x86, render_asm_x86_gas, render_c, render_c_x64,
-    render_cmake_lists, render_def, render_filters, render_filters_2026, render_slnx_2026,
-    render_solution, render_user, render_user_2026, render_vcxproj, render_vcxproj_2026,
-    OriginLoadMode, OriginLoadModeOwned, VsGuids, VsTemplateContext,
+    render_cmake_lists, render_def, render_filters, render_filters_2026, render_patch_cpp,
+    render_patch_header, render_slnx_2026, render_solution, render_user, render_user_2026,
+    render_vcxproj, render_vcxproj_2026, OriginLoadMode, OriginLoadModeOwned, VsGuids,
+    VsTemplateContext,
 };
 use eframe::egui;
 use rfd;
@@ -525,6 +526,8 @@ fn write_source_files(
     } else {
         None
     };
+    let patch_header = render_patch_header(&ctx);
+    let patch_cpp = render_patch_cpp(&ctx);
     let def_src = render_def(&ctx, is_x64);
 
     fs::create_dir_all(output_dir)?;
@@ -555,6 +558,8 @@ fn write_source_files(
     if let Some(content) = asm_src_x64_gas {
         write_file(&format!("{}_x64_jump.S", base_name), &content)?;
     }
+    write_file(&format!("{}_patch.h", base_name), &patch_header)?;
+    write_file(&format!("{}_patch.cpp", base_name), &patch_cpp)?;
     write_file(&format!("{}.def", base_name), &def_src)?;
 
     Ok(written)
@@ -630,6 +635,8 @@ fn write_cmake_project(
     } else {
         None
     };
+    let patch_header = render_patch_header(&ctx);
+    let patch_cpp = render_patch_cpp(&ctx);
     let def_src = render_def(&ctx, is_x64);
 
     fs::create_dir_all(output_dir)?;
@@ -662,6 +669,8 @@ fn write_cmake_project(
     if let Some(content) = asm_src_x64_gas {
         write_file(&format!("{}_x64_jump.S", base_name), &content)?;
     }
+    write_file(&format!("{}_patch.h", base_name), &patch_header)?;
+    write_file(&format!("{}_patch.cpp", base_name), &patch_cpp)?;
     write_file(&format!("{}.def", base_name), &def_src)?;
 
     Ok(written)
@@ -731,6 +740,8 @@ fn write_vs2022_project(
     } else {
         None
     };
+    let patch_header = render_patch_header(&ctx);
+    let patch_cpp = render_patch_cpp(&ctx);
     let def_src = render_def(&ctx, is_x64);
 
     fs::create_dir_all(output_dir)?;
@@ -759,6 +770,8 @@ fn write_vs2022_project(
     if let Some(content) = asm_src_x64 {
         write_file(&format!("{}_x64_jump.asm", base_name), &content)?;
     }
+    write_file(&format!("{}_patch.h", base_name), &patch_header)?;
+    write_file(&format!("{}_patch.cpp", base_name), &patch_cpp)?;
     write_file(&format!("{}.def", base_name), &def_src)?;
 
     Ok(written)
@@ -828,6 +841,8 @@ fn write_vs2026_project(
     } else {
         None
     };
+    let patch_header = render_patch_header(&ctx);
+    let patch_cpp = render_patch_cpp(&ctx);
     let def_src = render_def(&ctx, is_x64);
 
     fs::create_dir_all(output_dir)?;
@@ -856,6 +871,8 @@ fn write_vs2026_project(
     if let Some(content) = asm_src_x64 {
         write_file(&format!("{}_x64_jump.asm", base_name), &content)?;
     }
+    write_file(&format!("{}_patch.h", base_name), &patch_header)?;
+    write_file(&format!("{}_patch.cpp", base_name), &patch_cpp)?;
     write_file(&format!("{}.def", base_name), &def_src)?;
 
     Ok(written)

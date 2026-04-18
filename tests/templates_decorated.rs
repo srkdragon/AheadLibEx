@@ -1,7 +1,8 @@
 use aheadlibex_rs::dll::ExportEntry;
 use aheadlibex_rs::templates::{
     render_asm_x64, render_asm_x64_gas, render_asm_x86, render_c, render_c_x64, render_cmake_lists,
-    render_def, render_vcxproj, OriginLoadMode, VsGuids, VsTemplateContext,
+    render_def, render_patch_cpp, render_patch_header, render_vcxproj, OriginLoadMode, VsGuids,
+    VsTemplateContext,
 };
 
 fn named_export(name: &str, ordinal: u16) -> ExportEntry {
@@ -42,8 +43,15 @@ fn decorated_names_are_preserved_in_exports() {
     let ctx = dummy_ctx(&exports);
 
     let c_x86 = render_c(&ctx);
+    assert!(c_x86.contains(r#"#include "Foo_patch.h""#));
     assert!(c_x86.contains("FARPROC pfnAheadLibEx__Func__YAXH_Z = nullptr;"));
     assert!(c_x86.contains("namespace aheadlibex {"));
+    assert!(c_x86.contains("HANDLE g_patch_stop_event = nullptr;"));
+    assert!(c_x86.contains("const auto lifecycle = aheadlibex::user::configure_patch();"));
+    assert!(c_x86.contains("if (lifecycle.run_on_process_attach)"));
+    assert!(c_x86.contains("if (lifecycle.create_worker_thread)"));
+    assert!(c_x86.contains("aheadlibex::signal_patch_stop();"));
+    assert!(c_x86.contains("aheadlibex::user::on_process_detach(reserved != nullptr);"));
     assert!(c_x86.contains("StringCchPrintfA"));
     assert!(c_x86.contains(r#"pfnAheadLibEx__Func__YAXH_Z = get_address("?Func@@YAXH@Z");"#));
     assert!(c_x86.contains(r#"pfnAheadLibEx__Func_8 = get_address("@Func@8");"#));
@@ -56,6 +64,9 @@ fn decorated_names_are_preserved_in_exports() {
 
     let c_x64 = render_c_x64(&ctx);
     assert!(c_x64.contains("ScopedHandle"));
+    assert!(c_x64.contains("HMODULE proxy_module() noexcept"));
+    assert!(c_x64.contains("HANDLE stop_event() noexcept"));
+    assert!(c_x64.contains("return aheadlibex::user::on_worker_thread() ? 0 : 1;"));
     assert!(c_x64.contains(r#"pfnAheadLibEx__Func__YAXH_Z = get_address("?Func@@YAXH@Z");"#));
     assert!(c_x64.contains(r#"pfnAheadLibEx__Func_8 = get_address("@Func@8");"#));
     assert!(c_x64.contains(r#"pfnAheadLibEx___0Class__QAE_XZ = get_address("??0Class@@QAE@XZ");"#));
@@ -97,7 +108,8 @@ fn cmake_template_references_expected_files() {
     assert!(cmake_x86.contains("project(AheadLibEx_Foo"));
     assert!(cmake_x86.contains("project(AheadLibEx_Foo LANGUAGES CXX)"));
     assert!(cmake_x86.contains("set(CMAKE_CXX_STANDARD 17)"));
-    assert!(cmake_x86.contains("set(AHEADLIBEX_CPP \"Foo_x86.cpp\")"));
+    assert!(cmake_x86.contains("set(AHEADLIBEX_RUNTIME_CPP \"Foo_x86.cpp\")"));
+    assert!(cmake_x86.contains("set(AHEADLIBEX_PATCH_CPP \"Foo_patch.cpp\")"));
     assert!(cmake_x86.contains("set(AHEADLIBEX_ASM_MASM \"Foo_x86_jump.asm\")"));
     assert!(cmake_x86.contains("set(AHEADLIBEX_ASM_GAS \"Foo_x86_jump.S\")"));
     assert!(cmake_x86.contains("set(AHEADLIBEX_DEF \"Foo.def\")"));
@@ -111,6 +123,8 @@ fn win32_vcxproj_enables_masm_safeseh() {
 
     let win32 = render_vcxproj(&ctx, false);
     assert!(win32.contains("<ClCompile Include=\"Foo_x86.cpp\" />"));
+    assert!(win32.contains("<ClCompile Include=\"Foo_patch.cpp\" />"));
+    assert!(win32.contains("<ClInclude Include=\"Foo_patch.h\" />"));
     assert!(win32.contains("<None Include=\"Foo.def\" />"));
     assert!(win32.contains("<ModuleDefinitionFile>Foo.def</ModuleDefinitionFile>"));
     assert!(win32.contains("<LanguageStandard>stdcpp17</LanguageStandard>"));
@@ -119,6 +133,7 @@ fn win32_vcxproj_enables_masm_safeseh() {
 
     let x64 = render_vcxproj(&ctx, true);
     assert!(x64.contains("<ClCompile Include=\"Foo_x64.cpp\" />"));
+    assert!(x64.contains("<ClCompile Include=\"Foo_patch.cpp\" />"));
     assert!(!x64.contains("UseSafeExceptionHandlers"));
 }
 
@@ -140,4 +155,50 @@ fn hash_prefixed_and_spaced_names_are_treated_as_named_exports() {
     assert!(def_x64.contains("\"#RealName\"=AheadLibEx__RealName @9"));
     assert!(def_x64.contains("\"Name With Space\"=AheadLibEx_Name_With_Space @10"));
     assert!(def_x64.contains("Noname11=AheadLibEx_Unnamed11 @11 NONAME"));
+}
+
+#[test]
+fn user_patch_files_are_generated_with_a_clear_patch_entry() {
+    let exports = vec![named_export("Foo", 1)];
+    let ctx = dummy_ctx(&exports);
+
+    let patch_header = render_patch_header(&ctx);
+    assert!(patch_header.contains("HMODULE proxy_module() noexcept;"));
+    assert!(patch_header.contains("HMODULE original_module() noexcept;"));
+    assert!(patch_header.contains("HANDLE stop_event() noexcept;"));
+    assert!(patch_header.contains("bool stop_requested() noexcept;"));
+    assert!(patch_header.contains("bool run_on_process_attach;"));
+    assert!(patch_header.contains("bool create_worker_thread;"));
+    assert!(patch_header.contains("patch_lifecycle configure_patch() noexcept;"));
+    assert!(patch_header.contains("bool on_process_attach() noexcept;"));
+    assert!(patch_header.contains("bool on_worker_thread() noexcept;"));
+    assert!(patch_header.contains("void on_process_detach(bool process_terminating) noexcept;"));
+
+    let patch_cpp = render_patch_cpp(&ctx);
+    assert!(patch_cpp.contains(r#"#include "Foo_patch.h""#));
+    assert!(patch_cpp.contains("lifecycle.run_on_process_attach = false;"));
+    assert!(patch_cpp.contains("lifecycle.create_worker_thread = true;"));
+    assert!(patch_cpp.contains("const auto proxy = aheadlibex::proxy_module();"));
+    assert!(patch_cpp.contains("const auto original = aheadlibex::original_module();"));
+    assert!(patch_cpp.contains("const auto stop = aheadlibex::stop_event();"));
+    assert!(patch_cpp.contains("::OutputDebugString("));
+    assert!(patch_cpp.contains("AheadLibEx process-attach example ran."));
+    assert!(patch_cpp.contains("bool on_worker_thread() noexcept"));
+    assert!(patch_cpp.contains("::MessageBox("));
+    assert!(patch_cpp.contains("AheadLibEx worker thread example is running."));
+    assert!(patch_cpp.contains("Replace this MessageBox with your own patch logic."));
+    assert!(patch_cpp.contains("MB_OK | MB_ICONINFORMATION"));
+    assert!(patch_cpp.contains("if (stop == nullptr)"));
+    assert!(patch_cpp.contains("while (::WaitForSingleObject(stop, 1000) == WAIT_TIMEOUT)"));
+    assert!(patch_cpp.contains("AheadLibEx worker thread example tick."));
+    assert!(patch_cpp.contains("Put recurring patch work here."));
+    assert!(patch_cpp.contains("received stop_event and is exiting."));
+    assert!(patch_cpp.contains("configure_patch().run_on_process_attach = true"));
+    assert!(patch_cpp.contains("configure_patch().create_worker_thread = true"));
+    assert!(patch_cpp.contains("aheadlibex::stop_requested()"));
+    assert!(patch_cpp.contains("return true;"));
+    assert!(patch_cpp.contains("void on_process_detach(bool process_terminating) noexcept"));
+    assert!(patch_cpp.contains("AheadLibEx detach example saw stop_event already signaled."));
+    assert!(patch_cpp.contains("AheadLibEx detach example is running during process termination."));
+    assert!(patch_cpp.contains("AheadLibEx detach example cleanup ran."));
 }
