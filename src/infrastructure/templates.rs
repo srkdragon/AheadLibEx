@@ -1019,12 +1019,11 @@ pub fn render_asm_x64_gas(ctx: &VsTemplateContext) -> String {
     )
 }
 
-pub fn render_def(ctx: &VsTemplateContext, is_x64: bool) -> String {
+pub fn render_def(ctx: &VsTemplateContext, _is_x64: bool) -> String {
     let exports = prepare_exports(ctx.exports);
 
     fn needs_quotes(name: &str) -> bool {
-        name.chars()
-            .any(|c| !(c.is_ascii_alphanumeric() || c == '_' || c == '.'))
+        name.chars().any(|c| c.is_ascii_whitespace() || c == '"')
     }
 
     fn quote_if_needed(name: &str) -> String {
@@ -1042,11 +1041,7 @@ pub fn render_def(ctx: &VsTemplateContext, is_x64: bool) -> String {
     let mut ordinal_written = HashSet::new();
     for exp in &exports {
         let export_name = quote_if_needed(&exp.public_name);
-        let internal = if is_x64 {
-            format!("AheadLibEx_{}", exp.stub)
-        } else {
-            format!("_AheadLibEx_{}", exp.stub)
-        };
+        let internal = format!("AheadLibEx_{}", exp.stub);
         let write_ordinal = ordinal_written.insert(exp.ordinal);
         let ordinal_suffix = if write_ordinal {
             format!(" @{}", exp.ordinal)

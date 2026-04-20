@@ -73,15 +73,15 @@ fn decorated_names_are_preserved_in_exports() {
     assert!(c_x64.contains("pfnAheadLibEx_Unnamed345 = get_address(MAKEINTRESOURCEA(345));"));
 
     let def_x86 = render_def(&ctx, false);
-    assert!(def_x86.contains("\"?Func@@YAXH@Z\"=_AheadLibEx__Func__YAXH_Z @1"));
-    assert!(def_x86.contains("\"@Func@8\"=_AheadLibEx__Func_8 @2"));
-    assert!(def_x86.contains("\"??0Class@@QAE@XZ\"=_AheadLibEx___0Class__QAE_XZ @3"));
-    assert!(def_x86.contains("Noname345=_AheadLibEx_Unnamed345 @345 NONAME"));
+    assert!(def_x86.contains("?Func@@YAXH@Z=AheadLibEx__Func__YAXH_Z @1"));
+    assert!(def_x86.contains("@Func@8=AheadLibEx__Func_8 @2"));
+    assert!(def_x86.contains("??0Class@@QAE@XZ=AheadLibEx___0Class__QAE_XZ @3"));
+    assert!(def_x86.contains("Noname345=AheadLibEx_Unnamed345 @345 NONAME"));
 
     let def_x64 = render_def(&ctx, true);
-    assert!(def_x64.contains("\"?Func@@YAXH@Z\"=AheadLibEx__Func__YAXH_Z @1"));
-    assert!(def_x64.contains("\"@Func@8\"=AheadLibEx__Func_8 @2"));
-    assert!(def_x64.contains("\"??0Class@@QAE@XZ\"=AheadLibEx___0Class__QAE_XZ @3"));
+    assert!(def_x64.contains("?Func@@YAXH@Z=AheadLibEx__Func__YAXH_Z @1"));
+    assert!(def_x64.contains("@Func@8=AheadLibEx__Func_8 @2"));
+    assert!(def_x64.contains("??0Class@@QAE@XZ=AheadLibEx___0Class__QAE_XZ @3"));
     assert!(def_x64.contains("Noname345=AheadLibEx_Unnamed345 @345 NONAME"));
 }
 
@@ -166,7 +166,7 @@ fn hash_prefixed_and_spaced_names_are_treated_as_named_exports() {
     assert!(c_x64.contains("pfnAheadLibEx_Unnamed11 = get_address(MAKEINTRESOURCEA(11));"));
 
     let def_x64 = render_def(&ctx, true);
-    assert!(def_x64.contains("\"#RealName\"=AheadLibEx__RealName @9"));
+    assert!(def_x64.contains("#RealName=AheadLibEx__RealName @9"));
     assert!(def_x64.contains("\"Name With Space\"=AheadLibEx_Name_With_Space @10"));
     assert!(def_x64.contains("Noname11=AheadLibEx_Unnamed11 @11 NONAME"));
 }
