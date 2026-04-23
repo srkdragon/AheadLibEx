@@ -67,7 +67,12 @@ pub fn launch_gui() -> Result<()> {
     .map_err(|e| anyhow::anyhow!("Failed to launch GUI: {e}"))
 }
 
-fn tr(lang: UiLanguageChoice, en: &'static str, zh_hans: &'static str, zh_hant: &'static str) -> &'static str {
+fn tr(
+    lang: UiLanguageChoice,
+    en: &'static str,
+    zh_hans: &'static str,
+    zh_hant: &'static str,
+) -> &'static str {
     match lang {
         UiLanguageChoice::English => en,
         UiLanguageChoice::ZhHans => zh_hans,
@@ -227,12 +232,16 @@ impl eframe::App for App {
                                     RichText::new(tr(lang, "Generate", "生成", "生成"))
                                         .color(Color32::WHITE),
                                 )
-                                    .fill(if any_target { colors::ACCENT } else { colors::BORDER })
-                                    .sense(if any_target {
-                                        egui::Sense::click()
-                                    } else {
-                                        egui::Sense::hover()
-                                    }),
+                                .fill(if any_target {
+                                    colors::ACCENT
+                                } else {
+                                    colors::BORDER
+                                })
+                                .sense(if any_target {
+                                    egui::Sense::click()
+                                } else {
+                                    egui::Sense::hover()
+                                }),
                             )
                             .clicked()
                             && any_target
@@ -313,11 +322,7 @@ impl eframe::App for App {
                 Order::Foreground,
                 Id::new("drop_overlay"),
             ));
-            painter.rect_filled(
-                rect,
-                0.0,
-                Color32::from_rgba_unmultiplied(64, 128, 240, 25),
-            );
+            painter.rect_filled(rect, 0.0, Color32::from_rgba_unmultiplied(64, 128, 240, 25));
             painter.rect_stroke(
                 rect.shrink(20.0),
                 Rounding::same(12.0),
@@ -326,7 +331,12 @@ impl eframe::App for App {
             painter.text(
                 rect.center(),
                 egui::Align2::CENTER_CENTER,
-                tr(lang, "Drop DLL here", "将 DLL 拖放到此处", "將 DLL 拖放到此處"),
+                tr(
+                    lang,
+                    "Drop DLL here",
+                    "将 DLL 拖放到此处",
+                    "將 DLL 拖放到此處",
+                ),
                 egui::FontId::proportional(16.0),
                 colors::ACCENT,
             );
@@ -394,14 +404,14 @@ impl App {
         );
         ui.add_space(6.0);
 
-                Frame::none()
-                    .fill(colors::BG_CARD)
-                    .rounding(CARD_RADIUS)
-                    .stroke(Stroke::new(1.0, colors::BORDER))
-                    .inner_margin(CARD_PADDING)
-                    .show(ui, |ui| {
-                        ui.set_height(card_height);
-                        let input_width = ui.available_width() - BROWSE_BTN_WIDTH - SPACING;
+        Frame::none()
+            .fill(colors::BG_CARD)
+            .rounding(CARD_RADIUS)
+            .stroke(Stroke::new(1.0, colors::BORDER))
+            .inner_margin(CARD_PADDING)
+            .show(ui, |ui| {
+                ui.set_height(card_height);
+                let input_width = ui.available_width() - BROWSE_BTN_WIDTH - SPACING;
 
                 ui.label(
                     RichText::new(tr(lang, "Input DLL", "输入 DLL", "輸入 DLL"))
@@ -414,7 +424,12 @@ impl App {
                         ui,
                         [input_width, PATH_CONTROL_HEIGHT],
                         &mut state.dll_path,
-                        tr(lang, "Select or drop DLL...", "选择或拖放 DLL...", "選擇或拖放 DLL..."),
+                        tr(
+                            lang,
+                            "Select or drop DLL...",
+                            "选择或拖放 DLL...",
+                            "選擇或拖放 DLL...",
+                        ),
                     );
                     if ui
                         .add_sized(
@@ -509,7 +524,12 @@ impl App {
                         ui.selectable_value(
                             &mut state.origin_mode,
                             OriginModeChoice::SameDir,
-                            tr(lang, "Same directory (renamed)", "同目录（改名）", "同目錄（改名）"),
+                            tr(
+                                lang,
+                                "Same directory (renamed)",
+                                "同目录（改名）",
+                                "同目錄（改名）",
+                            ),
                         );
                         ui.selectable_value(
                             &mut state.origin_mode,
@@ -527,7 +547,12 @@ impl App {
                             ui,
                             [w, PATH_CONTROL_HEIGHT],
                             &mut state.origin_same_dir_name,
-                            tr(lang, "e.g. foo_orig.dll", "例如 foo_orig.dll", "例如 foo_orig.dll"),
+                            tr(
+                                lang,
+                                "e.g. foo_orig.dll or .\\\\bar\\\\foo_orig.dll",
+                                "例如 foo_orig.dll 或 .\\\\bar\\\\foo_orig.dll",
+                                "例如 foo_orig.dll 或 .\\\\bar\\\\foo_orig.dll",
+                            ),
                         );
                     }
                     OriginModeChoice::CustomPath => {

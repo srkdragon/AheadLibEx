@@ -31,7 +31,7 @@ GUI:
 CLI:
 
 ```text
-aheadlibex-rs.exe <source|vs2022|vs2026|cmake> <dll_path> <output_dir> [--origin-mode <system|samedir|custom>] [--origin-name <name.dll>] [--origin-path <path>]
+aheadlibex-rs.exe <source|vs2022|vs2026|cmake> <dll_path> <output_dir> [--origin-mode <system|samedir|custom>] [--origin-name <relative.dll>] [--origin-path <path>]
 ```
 
 Examples (default `system` mode):
@@ -47,18 +47,19 @@ aheadlibex-rs.exe cmake  "C:\path\to\foo.dll" "C:\path\to\out"
 Generated proxy sources must load the original DLL. This project supports multiple load modes.
 
 - `system` (default): load from `%SystemRoot%\System32\<dll>`
-- `samedir`: load from the proxy DLL directory using a renamed filename (default name: `<stem>_orig.dll`)
+- `samedir`: load from the proxy DLL directory using a renamed filename or relative subpath (default name: `<stem>_orig.dll`)
 - `custom`: load from a custom path (absolute, UNC, or relative to the proxy DLL directory)
 
 Examples (custom load modes):
 
 ```text
 aheadlibex-rs.exe vs2022 "C:\path\to\foo.dll" "C:\path\to\out" --origin-mode samedir --origin-name "foo_orig.dll"
+aheadlibex-rs.exe vs2022 "C:\path\to\foo.dll" "C:\path\to\out" --origin-mode samedir --origin-name ".\bar\foo_orig.dll"
 aheadlibex-rs.exe source "C:\path\to\foo.dll" "C:\path\to\out" --origin-mode custom --origin-path "\\server\share\foo.dll"
 ```
 
 Option notes:
-- `--origin-name` is used by `--origin-mode samedir`
+- `--origin-name` is used by `--origin-mode samedir` and accepts a bare filename or a path relative to the proxy DLL directory
 - `--origin-path` is used by `--origin-mode custom`
 
 ## Build Notes

@@ -7,20 +7,28 @@ use ui_events::{generate_cli, OutputTarget};
 
 #[cfg(windows)]
 use windows_sys::Win32::System::Console::{
-    AttachConsole, AllocConsole, FreeConsole, ATTACH_PARENT_PROCESS,
+    AllocConsole, AttachConsole, FreeConsole, ATTACH_PARENT_PROCESS,
 };
 
 fn print_usage() {
     println!("AheadLibEx usage:");
     println!("  aheadlibex-rs.exe <source|vs2022|vs2026|cmake> <dll_path> <output_dir> [options]");
     println!("Examples:");
-    println!("  aheadlibex-rs.exe source  \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\"");
-    println!("  aheadlibex-rs.exe vs2022 \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\"");
-    println!("  aheadlibex-rs.exe vs2026 \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\"");
-    println!("  aheadlibex-rs.exe cmake  \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\"");
+    println!(
+        "  aheadlibex-rs.exe source  \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\""
+    );
+    println!(
+        "  aheadlibex-rs.exe vs2022 \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\""
+    );
+    println!(
+        "  aheadlibex-rs.exe vs2026 \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\""
+    );
+    println!(
+        "  aheadlibex-rs.exe cmake  \"C:\\\\path\\\\to\\\\foo.dll\" \"C:\\\\path\\\\to\\\\out\""
+    );
     println!("Options:");
     println!("  --origin-mode <system|samedir|custom>   Where to load the original DLL (default: system).");
-    println!("  --origin-name <name.dll>               Used when --origin-mode samedir (default: <stem>_orig.dll).");
+    println!("  --origin-name <relative.dll>           Used when --origin-mode samedir (default: <stem>_orig.dll, supports subpaths like .\\bar\\foo_orig.dll).");
     println!("  --origin-path <path>                   Used when --origin-mode custom (absolute path, UNC, or relative to proxy DLL dir).");
     println!("No arguments -> GUI mode (console auto-detached on Windows).");
 }
@@ -155,9 +163,10 @@ fn parse_origin_load_mode(
                 .file_stem()
                 .map(|s| format!("{}_orig.dll", s.to_string_lossy()))
                 .unwrap_or_else(|| "origin_orig.dll".to_string());
-            Ok(OriginLoadModeOwned::same_dir(
-                origin_name.unwrap_or(default_name),
-            ))
+            let origin_name = origin_name.unwrap_or(default_name);
+            aheadlibex_rs::templates::validate_proxy_relative_path(&origin_name)
+                .map_err(anyhow::Error::msg)?;
+            Ok(OriginLoadModeOwned::same_dir(origin_name))
         }
         "custom" | "path" => {
             let Some(p) = origin_path else {
@@ -165,6 +174,9 @@ fn parse_origin_load_mode(
             };
             Ok(OriginLoadModeOwned::custom_path(p))
         }
-        other => bail!("Unknown --origin-mode '{}'. Use system|samedir|custom.", other),
+        other => bail!(
+            "Unknown --origin-mode '{}'. Use system|samedir|custom.",
+            other
+        ),
     }
 }

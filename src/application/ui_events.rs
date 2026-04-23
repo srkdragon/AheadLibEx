@@ -5,8 +5,8 @@ use crate::templates::{
     render_asm_x64, render_asm_x64_gas, render_asm_x86, render_asm_x86_gas, render_c, render_c_x64,
     render_cmake_lists, render_def, render_filters, render_filters_2026, render_patch_cpp,
     render_patch_header, render_slnx_2026, render_solution, render_user, render_user_2026,
-    render_vcxproj, render_vcxproj_2026, OriginLoadMode, OriginLoadModeOwned, VsGuids,
-    VsTemplateContext,
+    render_vcxproj, render_vcxproj_2026, validate_proxy_relative_path, OriginLoadMode,
+    OriginLoadModeOwned, VsGuids, VsTemplateContext,
 };
 use eframe::egui;
 use rfd;
@@ -399,13 +399,13 @@ fn build_origin_load_mode(state: &UiState, dll_stem: &str) -> anyhow::Result<Ori
         OriginModeChoice::SystemDir => Ok(OriginLoadModeOwned::system_dir()),
         OriginModeChoice::SameDir => {
             let name = state.origin_same_dir_name.trim();
-            if name.is_empty() {
-                Ok(OriginLoadModeOwned::same_dir(format!(
-                    "{dll_stem}_orig.dll"
-                )))
+            let name = if name.is_empty() {
+                format!("{dll_stem}_orig.dll")
             } else {
-                Ok(OriginLoadModeOwned::same_dir(name.to_string()))
-            }
+                name.to_string()
+            };
+            validate_proxy_relative_path(&name).map_err(anyhow::Error::msg)?;
+            Ok(OriginLoadModeOwned::same_dir(name))
         }
         OriginModeChoice::CustomPath => {
             let p = state.origin_custom_path.trim();
@@ -778,7 +778,9 @@ fn write_vs2022_project(
     if let Some(content) = c_src_x86 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x86.cpp", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x86.cpp", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
@@ -786,7 +788,9 @@ fn write_vs2022_project(
     if let Some(content) = c_src_x64 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x64.cpp", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x64.cpp", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
@@ -794,7 +798,9 @@ fn write_vs2022_project(
     if let Some(content) = asm_src_x86 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x86_jump.asm", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x86_jump.asm", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
@@ -802,26 +808,34 @@ fn write_vs2022_project(
     if let Some(content) = asm_src_x64 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x64_jump.asm", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x64_jump.asm", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
     }
     write_generated_file(
         output_dir,
-        Path::new("include").join(format!("{}_patch.h", base_name)).as_path(),
+        Path::new("include")
+            .join(format!("{}_patch.h", base_name))
+            .as_path(),
         &patch_header,
         &mut written,
     )?;
     write_generated_file(
         output_dir,
-        Path::new("src").join(format!("{}_patch.cpp", base_name)).as_path(),
+        Path::new("src")
+            .join(format!("{}_patch.cpp", base_name))
+            .as_path(),
         &patch_cpp,
         &mut written,
     )?;
     write_generated_file(
         output_dir,
-        Path::new("src").join(format!("{}.def", base_name)).as_path(),
+        Path::new("src")
+            .join(format!("{}.def", base_name))
+            .as_path(),
         &def_src,
         &mut written,
     )?;
@@ -916,7 +930,9 @@ fn write_vs2026_project(
     if let Some(content) = c_src_x86 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x86.cpp", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x86.cpp", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
@@ -924,7 +940,9 @@ fn write_vs2026_project(
     if let Some(content) = c_src_x64 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x64.cpp", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x64.cpp", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
@@ -932,7 +950,9 @@ fn write_vs2026_project(
     if let Some(content) = asm_src_x86 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x86_jump.asm", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x86_jump.asm", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
@@ -940,26 +960,34 @@ fn write_vs2026_project(
     if let Some(content) = asm_src_x64 {
         write_generated_file(
             output_dir,
-            Path::new("src").join(format!("{}_x64_jump.asm", base_name)).as_path(),
+            Path::new("src")
+                .join(format!("{}_x64_jump.asm", base_name))
+                .as_path(),
             &content,
             &mut written,
         )?;
     }
     write_generated_file(
         output_dir,
-        Path::new("include").join(format!("{}_patch.h", base_name)).as_path(),
+        Path::new("include")
+            .join(format!("{}_patch.h", base_name))
+            .as_path(),
         &patch_header,
         &mut written,
     )?;
     write_generated_file(
         output_dir,
-        Path::new("src").join(format!("{}_patch.cpp", base_name)).as_path(),
+        Path::new("src")
+            .join(format!("{}_patch.cpp", base_name))
+            .as_path(),
         &patch_cpp,
         &mut written,
     )?;
     write_generated_file(
         output_dir,
-        Path::new("src").join(format!("{}.def", base_name)).as_path(),
+        Path::new("src")
+            .join(format!("{}.def", base_name))
+            .as_path(),
         &def_src,
         &mut written,
     )?;
@@ -1007,16 +1035,12 @@ mod tests {
         assert!(vs2022_dir.join("src").join("example_x86_jump.asm").exists());
         assert!(vs2022_dir.join("src").join("example.def").exists());
         assert!(vs2022_dir.join("include").join("example_patch.h").exists());
-        assert!(
-            written_2022
-                .iter()
-                .any(|path| path.ends_with(r"src\example_patch.cpp"))
-        );
-        assert!(
-            written_2022
-                .iter()
-                .any(|path| path.ends_with(r"include\example_patch.h"))
-        );
+        assert!(written_2022
+            .iter()
+            .any(|path| path.ends_with(r"src\example_patch.cpp")));
+        assert!(written_2022
+            .iter()
+            .any(|path| path.ends_with(r"include\example_patch.h")));
 
         assert!(vs2026_dir.join("example.vcxproj").exists());
         assert!(vs2026_dir.join("src").join("example_x64.cpp").exists());
@@ -1024,18 +1048,43 @@ mod tests {
         assert!(vs2026_dir.join("src").join("example_x64_jump.asm").exists());
         assert!(vs2026_dir.join("src").join("example.def").exists());
         assert!(vs2026_dir.join("include").join("example_patch.h").exists());
-        assert!(
-            written_2026
-                .iter()
-                .any(|path| path.ends_with(r"src\example_x64.cpp"))
-        );
-        assert!(
-            written_2026
-                .iter()
-                .any(|path| path.ends_with(r"include\example_patch.h"))
-        );
+        assert!(written_2026
+            .iter()
+            .any(|path| path.ends_with(r"src\example_x64.cpp")));
+        assert!(written_2026
+            .iter()
+            .any(|path| path.ends_with(r"include\example_patch.h")));
 
         let _ = fs::remove_dir_all(&vs2022_dir);
         let _ = fs::remove_dir_all(&vs2026_dir);
+    }
+
+    #[test]
+    fn same_dir_origin_name_accepts_relative_subdirectory_path() {
+        let mut state = UiState::new();
+        state.origin_mode = OriginModeChoice::SameDir;
+        state.origin_same_dir_name = r".\bar\example_orig.dll".to_string();
+
+        let mode = build_origin_load_mode(&state, "example")
+            .expect("relative proxy path should be accepted");
+        match mode {
+            OriginLoadModeOwned::SameDir { original_name } => {
+                assert_eq!(original_name, r".\bar\example_orig.dll");
+            }
+            other => panic!("unexpected mode: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn same_dir_origin_name_rejects_absolute_path() {
+        let mut state = UiState::new();
+        state.origin_mode = OriginModeChoice::SameDir;
+        state.origin_same_dir_name = r"C:\Windows\System32\example.dll".to_string();
+
+        let err = build_origin_load_mode(&state, "example")
+            .expect_err("absolute path should be rejected for same-dir mode");
+        assert!(err
+            .to_string()
+            .contains("relative path under the proxy DLL directory"));
     }
 }

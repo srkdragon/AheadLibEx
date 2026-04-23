@@ -25,7 +25,7 @@ GUI：
 CLI：
 
 ```text
-aheadlibex-rs.exe <source|vs2022|vs2026|cmake> <dll_path> <output_dir> [--origin-mode <system|samedir|custom>] [--origin-name <name.dll>] [--origin-path <path>]
+aheadlibex-rs.exe <source|vs2022|vs2026|cmake> <dll_path> <output_dir> [--origin-mode <system|samedir|custom>] [--origin-name <relative.dll>] [--origin-path <path>]
 ```
 
 示例（默认 `system` 模式）：
@@ -41,18 +41,19 @@ aheadlibex-rs.exe cmake  "C:\path\to\foo.dll" "C:\path\to\out"
 生成的代理源码需要加载原始 DLL，支持多种加载模式。
 
 - `system`（默认）：从 `%SystemRoot%\System32\<dll>` 加载
-- `samedir`：从代理 DLL 所在目录加载改名后的原始 DLL（默认文件名：`<stem>_orig.dll`）
+- `samedir`：从代理 DLL 所在目录加载改名后的原始 DLL，或该目录下的相对路径 DLL（默认文件名：`<stem>_orig.dll`）
 - `custom`：从自定义路径加载（绝对路径、UNC，或相对代理 DLL 目录的相对路径）
 
 示例（自定义加载模式）：
 
 ```text
 aheadlibex-rs.exe vs2022 "C:\path\to\foo.dll" "C:\path\to\out" --origin-mode samedir --origin-name "foo_orig.dll"
+aheadlibex-rs.exe vs2022 "C:\path\to\foo.dll" "C:\path\to\out" --origin-mode samedir --origin-name ".\bar\foo_orig.dll"
 aheadlibex-rs.exe source "C:\path\to\foo.dll" "C:\path\to\out" --origin-mode custom --origin-path "\\server\share\foo.dll"
 ```
 
 选项说明：
-- `--origin-name` 与 `--origin-mode samedir` 配合使用
+- `--origin-name` 与 `--origin-mode samedir` 配合使用，可填写文件名或相对于代理 DLL 目录的相对路径
 - `--origin-path` 与 `--origin-mode custom` 配合使用
 
 ## 构建说明

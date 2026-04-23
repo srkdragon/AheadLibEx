@@ -145,6 +145,49 @@ bool query_system_dll_path(PathBuffer& path, const TCHAR* dll_name) noexcept
     return true;
 }
 
+bool query_module_relative_path(HMODULE module, const TCHAR* relative_path, PathBuffer& path) noexcept
+{
+    if (!query_module_directory(module, path))
+    {
+        return false;
+    }
+
+    const TCHAR* cursor = relative_path;
+    while (cursor[0] == TEXT('.') && (cursor[1] == TEXT('\\') || cursor[1] == TEXT('/')))
+    {
+        cursor += 2;
+    }
+
+    if (cursor[0] == TEXT('\0'))
+    {
+        show_message_box(TEXT("Relative original DLL path is empty, AheadLibEx cannot continue."));
+        return false;
+    }
+
+    PathBuffer normalized_relative{};
+    size_t index = 0;
+    while (cursor[0] != TEXT('\0'))
+    {
+        const auto ch = cursor[0] == TEXT('/') ? TEXT('\\') : cursor[0];
+        if (index + 1 >= normalized_relative.size())
+        {
+            show_path_too_long();
+            return false;
+        }
+        normalized_relative[index++] = ch;
+        ++cursor;
+    }
+    normalized_relative[index] = TEXT('\0');
+
+    if (!append_text(path, normalized_relative.data()))
+    {
+        show_path_too_long();
+        return false;
+    }
+
+    return true;
+}
+
 bool is_absolute_path(const TCHAR* path) noexcept
 {
     return (path[0] != TEXT('\0') && path[1] == TEXT(':'))

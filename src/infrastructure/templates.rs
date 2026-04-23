@@ -176,6 +176,31 @@ fn escape_c_text_literal(s: &str) -> String {
     out
 }
 
+pub fn is_windows_absolute_path(path: &str) -> bool {
+    let path = path.trim();
+    let bytes = path.as_bytes();
+    (bytes.len() >= 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':')
+        || path.starts_with("\\\\")
+        || path.starts_with("//")
+        || path.starts_with('\\')
+        || path.starts_with('/')
+}
+
+pub fn validate_proxy_relative_path(path: &str) -> Result<(), &'static str> {
+    let path = path.trim();
+    if path.is_empty() {
+        return Err("Origin DLL path must not be empty.");
+    }
+
+    if is_windows_absolute_path(path) {
+        return Err(
+            "Origin DLL path must be a file name or relative path under the proxy DLL directory.",
+        );
+    }
+
+    Ok(())
+}
+
 fn render_load_origin_module(ctx: &VsTemplateContext) -> String {
     let mut out = String::new();
     match ctx.origin_load_mode {
@@ -202,18 +227,12 @@ fn render_load_origin_module(ctx: &VsTemplateContext) -> String {
             let original = escape_c_text_literal(original_name);
             let _ = writeln!(out, "    PathBuffer module_path{{}};");
             let _ = writeln!(out, "");
-            let _ = writeln!(out, "    if (!query_module_directory(module, module_path))");
-            let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        return false;");
-            let _ = writeln!(out, "    }}");
-            let _ = writeln!(out, "");
             let _ = writeln!(
                 out,
-                "    if (!append_text(module_path, TEXT(\"{}\")))",
+                "    if (!query_module_relative_path(module, TEXT(\"{}\"), module_path))",
                 original
             );
             let _ = writeln!(out, "    {{");
-            let _ = writeln!(out, "        show_path_too_long();");
             let _ = writeln!(out, "        return false;");
             let _ = writeln!(out, "    }}");
             let _ = writeln!(out, "");
@@ -243,15 +262,9 @@ fn render_load_origin_module(ctx: &VsTemplateContext) -> String {
             let _ = writeln!(out, "    {{");
             let _ = writeln!(
                 out,
-                "        if (!query_module_directory(module, module_path))"
+                "        if (!query_module_relative_path(module, origin_cfg, module_path))"
             );
             let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            return false;");
-            let _ = writeln!(out, "        }}");
-            let _ = writeln!(out, "");
-            let _ = writeln!(out, "        if (!append_text(module_path, origin_cfg))");
-            let _ = writeln!(out, "        {{");
-            let _ = writeln!(out, "            show_path_too_long();");
             let _ = writeln!(out, "            return false;");
             let _ = writeln!(out, "        }}");
             let _ = writeln!(out, "    }}");

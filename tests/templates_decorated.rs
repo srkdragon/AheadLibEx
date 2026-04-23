@@ -1,8 +1,8 @@
 use aheadlibex_rs::dll::ExportEntry;
 use aheadlibex_rs::templates::{
-    render_asm_x64, render_asm_x64_gas, render_asm_x86, render_c, render_c_x64,
-    render_cmake_lists, render_def, render_filters, render_patch_cpp, render_patch_header,
-    render_vcxproj, render_vcxproj_2026, OriginLoadMode, VsGuids, VsTemplateContext,
+    render_asm_x64, render_asm_x64_gas, render_asm_x86, render_c, render_c_x64, render_cmake_lists,
+    render_def, render_filters, render_patch_cpp, render_patch_header, render_vcxproj,
+    render_vcxproj_2026, OriginLoadMode, VsGuids, VsTemplateContext,
 };
 
 fn named_export(name: &str, ordinal: u16) -> ExportEntry {
